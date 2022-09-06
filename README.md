@@ -5,4 +5,4 @@ All sources are distributed under GNU GPLv3.
 
 ## Program in C!
 
-https://www.youtube.com/watch?v=G7LJC9vJluU 
+https://www.youtube.com/watch?v=tas0O586t80
