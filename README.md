@@ -1,8 +1,9 @@
 # Remind me C
 
-This is a repo where I put C sources that were created as part of me reminding myself C.
-All sources are distributed under GNU GPLv3.
+The purpose of this repo is to remind me C.
 
-## Program in C!
+## Content
 
-https://www.youtube.com/watch?v=tas0O586t80
+- [quicksort](https://github.com/jprukner/remindmec/blob/master/quicksort) - an implementaiton of quicksort for integers
+- [resolver](https://github.com/jprukner/remindmec/blob/master/resolver) - an implementation of *dummy DNS resolver* that can answer only A queries with a predefined IP
+
