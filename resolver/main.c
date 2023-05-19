@@ -317,7 +317,6 @@ int main() {
 
   // handle signals
   sem_init(&stop, 0, 0);
-  sem_post(&stop);
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
