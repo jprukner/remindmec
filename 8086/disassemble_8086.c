@@ -43,13 +43,12 @@ int decode_mov_immediate_to_reg(unsigned char instruction_byte,
   const unsigned char word_mask = 0x08;
   const unsigned char register_mask = 0x07;
   unsigned char buffer[2] = {0};
-  unsigned char word = (instruction_byte & word_mask);
+  unsigned char word = (instruction_byte & word_mask) >> 3;
   unsigned char reg = instruction_byte & register_mask;
 
-  if (fread(buffer, sizeof(instruction_byte) * (word + 1), 1, executable) !=
-      1) {
-    fprintf(stderr, "failed to read %lu amount of bytes\n",
-            sizeof(instruction_byte) * (word + 1));
+  size_t size = sizeof(instruction_byte) * (word + 1);
+  if (fread(buffer, size, 1, executable) != 1) {
+    fprintf(stderr, "failed to read %lu amount of bytes\n", size);
     return EXIT_FAILURE;
   }
 
