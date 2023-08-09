@@ -37,9 +37,9 @@ char *register_word_map[][8] = {
     {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"},
 };
 
-int decode_mov_immidiate_to_reg(unsigned char instruction_byte,
+int decode_mov_immediate_to_reg(unsigned char instruction_byte,
                                 FILE *executable) {
-  fprintf(stderr, "this is mov immidiate to reg\n");
+  fprintf(stderr, "this is mov immediate to reg\n");
   const unsigned char word_mask = 0x08;
   const unsigned char register_mask = 0x07;
   unsigned char buffer[2] = {0};
@@ -121,15 +121,15 @@ int main(int argc, char *argv[]) {
   unsigned char instruction_byte;
 
   const unsigned char mov_reg_mem_reg_mask = 0x88;
-  const unsigned char mov_immidiate_to_reg_mask = 0xb0;
+  const unsigned char mov_immediate_to_reg_mask = 0xb0;
 
   unsigned char instruction_opcode_prefixes[] = {
-      mov_immidiate_to_reg_mask,
+      mov_immediate_to_reg_mask,
       mov_reg_mem_reg_mask,
   };
 
   int (*decoders[])(unsigned char instruction_byte, FILE *executable) = {
-      decode_mov_immidiate_to_reg,
+      decode_mov_immediate_to_reg,
       decode_mov_reg_mem_reg,
   };
 
