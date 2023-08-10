@@ -52,7 +52,9 @@ int decode_mov_immediate_to_reg(unsigned char instruction_byte,
     return EXIT_FAILURE;
   }
 
-  uint16_t number = (uint16_t)(*buffer);
+  uint16_t number = buffer[0];
+  number = number | ((uint16_t)(buffer[1]) << 8);
+
   debug_byte_as_binary("low byte of number:", buffer[0]);
   debug_byte_as_binary("high byte of number:", buffer[1]);
 
@@ -150,6 +152,7 @@ int main(int argc, char *argv[]) {
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }
+        break;
       }
     }
     if (found == 0) {
