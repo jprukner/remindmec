@@ -9,6 +9,7 @@
 
 #define MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
 #define MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT 1
+#define MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT 2
 #define MOV_MODE_REGISTER_TO_REGISTER_MODE 3
 #define UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH 18
 
@@ -97,6 +98,16 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
           "[bp + %u]",
           "[bx + %u]",
       },
+      {
+          "[bx + si + %u]",
+          "[bx + di + %u]",
+          "[bp + si + %u]",
+          "[bp + di + %u]",
+          "[si + %u]",
+          "[di + %u]",
+          "[bp + %u]",
+          "[bx + %u]",
+      },
   };
 
   fprintf(stderr, "it's mov type 'Register/memory to/from register' \n");
@@ -137,7 +148,7 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
   case MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
-    fprintf(stderr, "mov mode: Memory Mode, no displacement\n");
+    fprintf(stderr, "mov mode: Memory Mode, one byte displacement\n");
     source = memory_displacement_expresion_table[mode][reg_mem];
     n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
     if (n != 1) {
@@ -149,11 +160,39 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     debug_byte_as_binary("displacement as binary", instruction_byte);
     fprintf(stderr, "displacement: %u\n", instruction_byte);
 
-    // TODO fix n in the argment as it is not only length of what is the input
-    // but it is a length of whole output string.
     n = snprintf(displacement_formated_buffer,
                  UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
                  instruction_byte);
+
+    fprintf(stderr, "%s\n", displacement_formated_buffer);
+    if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
+      fprintf(stderr, "failed to format displacement, n is %lu\n", n);
+      return EXIT_FAILURE;
+    }
+    source = displacement_formated_buffer;
+    break;
+  case MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
+    fprintf(stderr, "mov mode: Memory Mode, two byte displacement\n");
+    source = memory_displacement_expresion_table[mode][reg_mem];
+    unsigned char buffer[2] = {0};
+
+    n = fread(&buffer, sizeof(buffer), 1, executable);
+    if (n != 1) {
+      fprintf(
+          stderr,
+          "expected one byte for mov instruction to be complete, got none\n");
+      return EXIT_FAILURE;
+    }
+    uint16_t number = buffer[0];
+    number = number | ((uint16_t)(buffer[1]) << 8);
+    debug_byte_as_binary("displacement as binary, first byte", buffer[0]);
+    debug_byte_as_binary("displacement as binary, second byte", buffer[1]);
+
+    fprintf(stderr, "displacement: %u\n", number);
+
+    n = snprintf(displacement_formated_buffer,
+                 UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
+                 number);
 
     fprintf(stderr, "%s\n", displacement_formated_buffer);
     if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
