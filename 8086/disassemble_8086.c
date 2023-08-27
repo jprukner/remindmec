@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
+#define MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT 1
+#define MOV_MODE_REGISTER_TO_REGISTER_MODE 3
+#define UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH 18
+
 void print_byte_as_binary(unsigned char input) {
   char output[(sizeof(input) * 8) + 1] = {0};
   int sizeof_input_bits = sizeof(input) * 8;
@@ -69,6 +74,30 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
   const unsigned char mode_mask = 0xc0;
   const unsigned char register_mask = 0x38;
   const unsigned char register_memory_mask = 0x07;
+  // TODO finish mov register to memory with no displacement and then with 8b
+  // and 16b the displacements.
+  char *memory_displacement_expresion_table[][8] = {
+      {
+          "[bx + si]",
+          "[bx + di]",
+          "[bp + si]",
+          "[bp + di]",
+          "[si]",
+          "[di]",
+          "%s",
+          "[bx]",
+      },
+      {
+          "[bx + si + %u]",
+          "[bx + di + %u]",
+          "[bp + si + %u]",
+          "[bp + di + %u]",
+          "[si + %u]",
+          "[di + %u]",
+          "[bp + %u]",
+          "[bx + %u]",
+      },
+  };
 
   fprintf(stderr, "it's mov type 'Register/memory to/from register' \n");
   unsigned char direction = (instruction_byte & direction_mask) >> 1;
@@ -84,28 +113,66 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     return EXIT_FAILURE;
   }
 
-  unsigned char mode = instruction_byte & mode_mask;
+  unsigned char mode = (instruction_byte & mode_mask) >> 6;
+  unsigned char reg = (instruction_byte & register_mask) >> 3;
+  unsigned char reg_mem = instruction_byte & register_memory_mask;
+  debug_byte_as_binary("reg:", reg);
+  debug_byte_as_binary("reg/mem:", reg_mem);
+
+  const char *destination = register_word_map[word][reg];
+  const char *source = NULL;
+
+  char displacement_formated_buffer
+      [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
+
   switch (mode) {
-  case 0xc0:
+  case MOV_MODE_REGISTER_TO_REGISTER_MODE:
     fprintf(stderr, "mov mode: Register Mode\n");
-    unsigned char reg = (instruction_byte & register_mask) >> 3;
-    unsigned char reg_mem = instruction_byte & register_memory_mask;
-    debug_byte_as_binary("reg:", reg);
-    debug_byte_as_binary("reg/mem:", reg_mem);
-    if (direction == 0) {
-      unsigned char tmp = reg;
-      reg = reg_mem;
-      reg_mem = tmp;
+    source = register_word_map[word][reg_mem];
+
+    break;
+  case MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
+    fprintf(stderr, "mov mode: Memory Mode, no displacement\n");
+    source = memory_displacement_expresion_table[mode][reg_mem];
+    // TODO handle specail case for MODE=0b110 - direct address.
+    break;
+  case MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
+    fprintf(stderr, "mov mode: Memory Mode, no displacement\n");
+    source = memory_displacement_expresion_table[mode][reg_mem];
+    n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
+    if (n != 1) {
+      fprintf(
+          stderr,
+          "expected one byte for mov instruction to be complete, got none\n");
+      return EXIT_FAILURE;
     }
+    debug_byte_as_binary("displacement as binary", instruction_byte);
+    fprintf(stderr, "displacement: %u\n", instruction_byte);
 
-    printf("mov %s, %s\n", register_word_map[word][reg],
-           register_word_map[word][reg_mem]);
+    // TODO fix n in the argment as it is not only length of what is the input
+    // but it is a length of whole output string.
+    n = snprintf(displacement_formated_buffer,
+                 UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
+                 instruction_byte);
 
+    fprintf(stderr, "%s\n", displacement_formated_buffer);
+    if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
+      fprintf(stderr, "failed to format displacement, n is %lu\n", n);
+      return EXIT_FAILURE;
+    }
+    source = displacement_formated_buffer;
     break;
   default:
     debug_byte_as_binary("unknown mode: ", mode);
     return EXIT_FAILURE;
   }
+  if (direction == 0) {
+    // reverse default destination, source order of arguments in the instruction
+    const char *tmp = destination;
+    destination = source;
+    source = tmp;
+  }
+  printf("mov %s, %s\n", destination, source);
   return EXIT_SUCCESS;
 }
 
