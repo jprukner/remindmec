@@ -85,6 +85,25 @@ int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
+int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
+                                                FILE *executable,
+                                                const char *instruction_name) {
+  fprintf(stderr, "this is %s immediate to reg\n", instruction_name);
+  const unsigned char word_mask = 0x01;
+  unsigned char word = instruction_byte & word_mask;
+
+  uint16_t number = 0;
+  size_t size = (word + 1);
+  int n = read_n_bytes_as_number(size, &number, executable);
+  if (n < 0) {
+    return EXIT_FAILURE;
+  }
+
+  printf("%s ax, %u\n", instruction_name, number);
+
+  return EXIT_SUCCESS;
+}
+
 static const char *memory_displacement_expresion_table[][8] = {
     {
         "[bx + si]",
@@ -334,18 +353,20 @@ int main(int argc, char *argv[]) {
       {.mask = 0b11111100, .value = 0b00000000},
       // add immmediate to register
       {.mask = 0b11111100, .value = 0b10000000},
-
+      // add immediate to accumulator
+      {.mask = 0b11111110, .value = 0b00000100},
   };
 
-  char *instruction_names[] = {"mov", "mov", "mov", "add", "add"};
+  char *instruction_names[] = {"mov", "mov", "mov", "add", "add", "add"};
 
   int (*decoders[])(unsigned char instruction_byte, FILE *executable,
                     const char *instruction_name) = {
-      decode_instruction_immediate_to_reg,        // mov ax, 6
-      decode_instruction_reg_mem_reg,             // mov ax, [bp + 2]
-      decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
-      decode_instruction_reg_mem_reg,             // add ax, [bp +2]
-      decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
+      decode_instruction_immediate_to_reg,         // mov bx, 6
+      decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
+      decode_instruction_immediate_to_memory_reg,  // mov [bp + 2], 7
+      decode_instruction_reg_mem_reg,              // add ax, [bp +2]
+      decode_instruction_immediate_to_memory_reg,  // add [bp + 2], 7
+      decode_instruction_immediate_to_accumulator, // add ax, 7
   };
 
   size_t decoders_count = sizeof(decoders) / sizeof(decoders[0]);
