@@ -43,9 +43,10 @@ char *register_word_map[][8] = {
     {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"},
 };
 
-int decode_mov_immediate_to_reg(unsigned char instruction_byte,
-                                FILE *executable) {
-  fprintf(stderr, "this is mov immediate to reg\n");
+int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
+                                        FILE *executable,
+                                        const char *instruction_name) {
+  fprintf(stderr, "this is %s immediate to reg\n", instruction_name);
   const unsigned char word_mask = 0x08;
   const unsigned char register_mask = 0x07;
   unsigned char buffer[2] = {0};
@@ -64,19 +65,20 @@ int decode_mov_immediate_to_reg(unsigned char instruction_byte,
   debug_byte_as_binary("low byte of number:", buffer[0]);
   debug_byte_as_binary("high byte of number:", buffer[1]);
 
-  printf("mov %s, %u\n", register_word_map[word][reg], number);
+  printf("%s %s, %u\n", instruction_name, register_word_map[word][reg], number);
 
   return EXIT_SUCCESS;
 }
 
-int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
+int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
+                                   FILE *executable,
+                                   const char *instruction_name) {
   const unsigned char direction_mask = 0x02;
   const unsigned char word_mask = 0x01;
   const unsigned char mode_mask = 0xc0;
   const unsigned char register_mask = 0x38;
   const unsigned char register_memory_mask = 0x07;
-  // TODO finish mov register to memory with no displacement and then with 8b
-  // and 16b the displacements.
+
   char *memory_displacement_expresion_table[][8] = {
       {
           "[bx + si]",
@@ -110,17 +112,19 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
       },
   };
 
-  fprintf(stderr, "it's mov type 'Register/memory to/from register' \n");
+  fprintf(stderr, "it's %s type 'Register/memory to/from register' \n",
+          instruction_name);
   unsigned char direction = (instruction_byte & direction_mask) >> 1;
   unsigned char word = instruction_byte & word_mask;
-  debug_byte_as_binary("mov - next byte as binary: ", instruction_byte);
+  debug_byte_as_binary("next byte as binary: ", instruction_byte);
   fprintf(stderr, "direction is %u\n", direction);
   fprintf(stderr, "word is %u\n", word);
 
   size_t n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
   if (n != 1) {
     fprintf(stderr,
-            "expected one byte for mov instruction to be complete, got none\n");
+            "expected one byte for %s instruction to be complete, got none\n",
+            instruction_name);
     return EXIT_FAILURE;
   }
 
@@ -138,11 +142,12 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
 
   switch (mode) {
   case MOV_MODE_REGISTER_TO_REGISTER_MODE:
-    fprintf(stderr, "mov mode: Register Mode\n");
+    fprintf(stderr, "%s mode: Register Mode\n", instruction_name);
     source = register_word_map[word][reg_mem];
     break;
   case MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
-    fprintf(stderr, "mov mode: Memory Mode, no displacement\n");
+    fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
+            instruction_name);
     source = memory_displacement_expresion_table[mode][reg_mem];
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
@@ -150,15 +155,16 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
     // mode value itself.
   case MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
-    fprintf(stderr, "mov mode: Memory Mode, %u byte displacement\n", mode);
+    fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
+            instruction_name, mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
     unsigned char buffer[2] = {0};
 
     n = fread(buffer, sizeof(unsigned char) * mode, 1, executable);
     if (n != 1) {
-      fprintf(
-          stderr,
-          "expected one byte for mov instruction to be complete, got none\n");
+      fprintf(stderr,
+              "expected one byte for %s instruction to be complete, got none\n",
+              instruction_name);
       return EXIT_FAILURE;
     }
     uint16_t number = buffer[0];
@@ -189,11 +195,11 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     destination = source;
     source = tmp;
   }
-  printf("mov %s, %s\n", destination, source);
+  printf("%s %s, %s\n", instruction_name, destination, source);
   return EXIT_SUCCESS;
 }
 
-struct instruction_prefix {
+struct instruction {
   unsigned char mask;
   unsigned char value;
 };
@@ -210,16 +216,25 @@ int main(int argc, char *argv[]) {
   FILE *executable = fopen(argv[1], "rb");
   unsigned char instruction_byte;
 
-  struct instruction_prefix instruction_opcode_prefixes[] = {
+  struct instruction instruction_opcode_prefixes[] = {
       // mov immmediate to register
       {.mask = 0b11110000, .value = 0b10110000},
       // mov reg reg/mem with optional displacement
       {.mask = 0b11111100, .value = 0b10001000},
+      // add reg reg/mem with optional displacement
+      {.mask = 0b11111100, .value = 0b00000000},
+      // add immmediate to register
+      // {.mask = 0b11111100, .value = 0b10000000},
+
   };
 
-  int (*decoders[])(unsigned char instruction_byte, FILE *executable) = {
-      decode_mov_immediate_to_reg,
-      decode_mov_reg_mem_reg,
+  char *instruction_names[] = {"mov", "mov", "add"};
+
+  int (*decoders[])(unsigned char instruction_byte, FILE *executable,
+                    const char *instruction_name) = {
+      decode_instruction_immediate_to_reg, // mov ax, 6
+      decode_instruction_reg_mem_reg,      // mov ax, [bp + 2]
+      decode_instruction_reg_mem_reg,      // add ax, [bp +2]
   };
 
   size_t decoders_count = sizeof(decoders) / sizeof(decoders[0]);
@@ -237,7 +252,8 @@ int main(int argc, char *argv[]) {
       debug_byte_as_binary("trying following prefix:", opcode_prefix);
       if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
-        exit_code = decoders[i](instruction_byte, executable);
+        exit_code =
+            decoders[i](instruction_byte, executable, instruction_names[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }
