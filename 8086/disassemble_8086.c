@@ -43,27 +43,39 @@ static const char *register_word_map[][8] = {
     {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"},
 };
 
+// read one or two bytes based on n_bytes variable
+int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
+                           FILE *executable) {
+  if (n_bytes != 2 && n_bytes != 1) {
+    fprintf(stderr, "expected 1 or 2 bytes to read, got %u\n", n_bytes);
+    return -1;
+  }
+  unsigned char buffer[2] = {0};
+  if (fread(buffer, n_bytes, 1, executable) != 1) {
+    fprintf(stderr, "failed to read %u bytes\n", n_bytes);
+    return -1;
+  }
+
+  *number_output = buffer[0];
+  *number_output = (*number_output) | ((uint16_t)(buffer[1]) << 8);
+  return 1;
+}
+
 int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
                                         FILE *executable,
                                         const char *instruction_name) {
   fprintf(stderr, "this is %s immediate to reg\n", instruction_name);
   const unsigned char word_mask = 0x08;
   const unsigned char register_mask = 0x07;
-  unsigned char buffer[2] = {0};
   unsigned char word = (instruction_byte & word_mask) >> 3;
   unsigned char reg = instruction_byte & register_mask;
 
-  size_t size = sizeof(instruction_byte) * (word + 1);
-  if (fread(buffer, size, 1, executable) != 1) {
-    fprintf(stderr, "failed to read %lu amount of bytes\n", size);
+  size_t size = (word + 1);
+  uint16_t number = 0;
+  int n = read_n_bytes_as_number(size, &number, executable);
+  if (n < 0) {
     return EXIT_FAILURE;
   }
-
-  uint16_t number = buffer[0];
-  number = number | ((uint16_t)(buffer[1]) << 8);
-
-  debug_byte_as_binary("low byte of number:", buffer[0]);
-  debug_byte_as_binary("high byte of number:", buffer[1]);
 
   printf("%s %s, %u\n", instruction_name, register_word_map[word][reg], number);
 
@@ -113,23 +125,16 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
             n_bytes_displacement);
     return -1;
   }
-  unsigned char buffer[2] = {0};
-  size_t n = fread(buffer, sizeof(unsigned char) * n_bytes_displacement, 1,
-                   executable);
-  if (n != 1) {
-    fprintf(
-        stderr,
-        "expected %u byte(s) for the instruction to be complete, got none\n",
-        n_bytes_displacement);
+
+  uint16_t displacement = 0;
+  int n =
+      read_n_bytes_as_number(n_bytes_displacement, &displacement, executable);
+  if (n < 0) {
     return -1;
   }
-  uint16_t number = buffer[0];
-  number = number | ((uint16_t)(buffer[1]) << 8);
-  debug_byte_as_binary("displacement as binary, first byte", buffer[0]);
-  debug_byte_as_binary("displacement as binary, second byte", buffer[1]);
 
   n = snprintf(formated_displacement_output, formated_displacement_output_legth,
-               displacement_template, number);
+               displacement_template, displacement);
 
   fprintf(stderr, "%s\n", formated_displacement_output);
   if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
