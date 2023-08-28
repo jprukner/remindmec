@@ -193,6 +193,11 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
   return EXIT_SUCCESS;
 }
 
+struct instruction_prefix {
+  unsigned char mask;
+  unsigned char value;
+};
+
 int main(int argc, char *argv[]) {
   if (argc != 2) {
     fprintf(
@@ -205,12 +210,11 @@ int main(int argc, char *argv[]) {
   FILE *executable = fopen(argv[1], "rb");
   unsigned char instruction_byte;
 
-  const unsigned char mov_reg_mem_reg_mask = 0x88;
-  const unsigned char mov_immediate_to_reg_mask = 0xb0;
-
-  unsigned char instruction_opcode_prefixes[] = {
-      mov_immediate_to_reg_mask,
-      mov_reg_mem_reg_mask,
+  struct instruction_prefix instruction_opcode_prefixes[] = {
+      // mov immmediate to register
+      {.mask = 0b11110000, .value = 0b10110000},
+      // mov reg reg/mem with optional displacement
+      {.mask = 0b11111100, .value = 0b10001000},
   };
 
   int (*decoders[])(unsigned char instruction_byte, FILE *executable) = {
@@ -228,9 +232,10 @@ int main(int argc, char *argv[]) {
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
     for (int i = 0; i < decoders_count; i++) {
-      unsigned char opcode_prefix = instruction_opcode_prefixes[i];
+      unsigned char opcode_mask = instruction_opcode_prefixes[i].mask;
+      unsigned char opcode_prefix = instruction_opcode_prefixes[i].value;
       debug_byte_as_binary("trying following prefix:", opcode_prefix);
-      if ((instruction_byte & opcode_prefix) == opcode_prefix) {
+      if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
         exit_code = decoders[i](instruction_byte, executable);
         if (exit_code != EXIT_SUCCESS) {
