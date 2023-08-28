@@ -140,7 +140,6 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
   case MOV_MODE_REGISTER_TO_REGISTER_MODE:
     fprintf(stderr, "mov mode: Register Mode\n");
     source = register_word_map[word][reg_mem];
-
     break;
   case MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "mov mode: Memory Mode, no displacement\n");
@@ -148,35 +147,14 @@ int decode_mov_reg_mem_reg(unsigned char instruction_byte, FILE *executable) {
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
   case MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
-    fprintf(stderr, "mov mode: Memory Mode, one byte displacement\n");
-    source = memory_displacement_expresion_table[mode][reg_mem];
-    n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
-    if (n != 1) {
-      fprintf(
-          stderr,
-          "expected one byte for mov instruction to be complete, got none\n");
-      return EXIT_FAILURE;
-    }
-    debug_byte_as_binary("displacement as binary", instruction_byte);
-    fprintf(stderr, "displacement: %u\n", instruction_byte);
-
-    n = snprintf(displacement_formated_buffer,
-                 UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
-                 instruction_byte);
-
-    fprintf(stderr, "%s\n", displacement_formated_buffer);
-    if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
-      fprintf(stderr, "failed to format displacement, n is %lu\n", n);
-      return EXIT_FAILURE;
-    }
-    source = displacement_formated_buffer;
-    break;
+    // Let's FALLTHROUGH as this can be handled by following case by utilizing
+    // mode value itself.
   case MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
-    fprintf(stderr, "mov mode: Memory Mode, two byte displacement\n");
+    fprintf(stderr, "mov mode: Memory Mode, %u byte displacement\n", mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
     unsigned char buffer[2] = {0};
 
-    n = fread(&buffer, sizeof(buffer), 1, executable);
+    n = fread(buffer, sizeof(unsigned char) * mode, 1, executable);
     if (n != 1) {
       fprintf(
           stderr,
