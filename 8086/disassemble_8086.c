@@ -7,10 +7,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
-#define MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT 1
-#define MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT 2
-#define MOV_MODE_REGISTER_TO_REGISTER_MODE 3
+#define INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
+#define INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT 1
+#define INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT 2
+#define INSTRUCTION_MODE_REGISTER 3
 #define UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH 18
 
 void print_byte_as_binary(unsigned char input) {
@@ -52,12 +52,15 @@ int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
   }
   unsigned char buffer[2] = {0};
   if (fread(buffer, n_bytes, 1, executable) != 1) {
-    fprintf(stderr, "failed to read %u bytes\n", n_bytes);
+    fprintf(stderr, "failed to read %lu bytes\n", n_bytes);
     return -1;
   }
 
   *number_output = buffer[0];
   *number_output = (*number_output) | ((uint16_t)(buffer[1]) << 8);
+  debug_byte_as_binary("read_n_bytes_as_number: buffer[0]", buffer[0]);
+  debug_byte_as_binary("read_n_bytes_as_number: buffer[1]", buffer[1]);
+  fprintf(stderr, "read_n_bytes_as_number, read number: %u\n", *number_output);
   return 1;
 }
 
@@ -70,8 +73,8 @@ int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
   unsigned char word = (instruction_byte & word_mask) >> 3;
   unsigned char reg = instruction_byte & register_mask;
 
-  size_t size = (word + 1);
   uint16_t number = 0;
+  size_t size = (word + 1);
   int n = read_n_bytes_as_number(size, &number, executable);
   if (n < 0) {
     return EXIT_FAILURE;
@@ -157,7 +160,6 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
           instruction_name);
   unsigned char direction = (instruction_byte & direction_mask) >> 1;
   unsigned char word = instruction_byte & word_mask;
-  debug_byte_as_binary("next byte as binary: ", instruction_byte);
   fprintf(stderr, "direction is %u\n", direction);
   fprintf(stderr, "word is %u\n", word);
 
@@ -168,6 +170,7 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
             instruction_name);
     return EXIT_FAILURE;
   }
+  debug_byte_as_binary("next byte as binary: ", instruction_byte);
 
   unsigned char mode = (instruction_byte & mode_mask) >> 6;
   unsigned char reg = (instruction_byte & register_mask) >> 3;
@@ -182,20 +185,20 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
       [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
 
   switch (mode) {
-  case MOV_MODE_REGISTER_TO_REGISTER_MODE:
+  case INSTRUCTION_MODE_REGISTER:
     fprintf(stderr, "%s mode: Register Mode\n", instruction_name);
     source = register_word_map[word][reg_mem];
     break;
-  case MOV_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction_name);
     source = memory_displacement_expresion_table[mode][reg_mem];
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
-  case MOV_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
     // mode value itself.
-  case MOV_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction_name, mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
@@ -222,6 +225,87 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
+int decode_instruction_immediate_to_memory_reg(unsigned char instruction_byte,
+                                               FILE *executable,
+                                               const char *instruction_name) {
+  const unsigned char word_mask = 0x01;
+  const unsigned char sign_extension_mask = 0x02;
+  const unsigned char mode_mask = 0xc0;
+  const unsigned char register_memory_mask = 0x07;
+
+  fprintf(stderr, "it's %s type 'Immediate to register/memory' \n",
+          instruction_name);
+
+  unsigned char word = instruction_byte & word_mask;
+  unsigned char sign_extension = (instruction_byte & sign_extension_mask) >> 1;
+  fprintf(stderr, "word is %u\n", word);
+
+  size_t n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
+  if (n != 1) {
+    fprintf(stderr,
+            "expected one byte for %s instruction to be complete, got none\n",
+            instruction_name);
+    return EXIT_FAILURE;
+  }
+  debug_byte_as_binary("next byte as binary: ", instruction_byte);
+
+  unsigned char mode = (instruction_byte & mode_mask) >> 6;
+  unsigned char reg_mem = instruction_byte & register_memory_mask;
+  debug_byte_as_binary("reg/mem:", reg_mem);
+
+  const char *destination = NULL;
+  uint16_t number = 0;
+
+  char displacement_formated_buffer
+      [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
+
+  switch (mode) {
+  case INSTRUCTION_MODE_REGISTER:
+    fprintf(stderr, "%s mode: Register Mode\n", instruction_name);
+    destination = register_word_map[word][reg_mem];
+    break;
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
+    fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
+            instruction_name);
+    destination = memory_displacement_expresion_table[mode][reg_mem];
+    // TODO handle specail case for MODE=0b110 - direct address.
+    break;
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
+    // Let's FALLTHROUGH as this can be handled by following case by utilizing
+    // mode value itself.
+  case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
+    fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
+            instruction_name, mode);
+    destination = memory_displacement_expresion_table[mode][reg_mem];
+    n = load_n_bytes_displacement(
+        mode, displacement_formated_buffer,
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
+        executable);
+    if (n < 0) {
+      return EXIT_FAILURE;
+    }
+    fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
+    destination = displacement_formated_buffer;
+    break;
+  default:
+    debug_byte_as_binary("unknown mode: ", mode);
+    return EXIT_FAILURE;
+  }
+  size_t size;
+  if (sign_extension == 0 && word == 1) {
+    size = 2;
+  } else {
+    size = 1;
+  }
+  n = read_n_bytes_as_number(size, &number, executable);
+  if (n < 0) {
+    return EXIT_FAILURE;
+  }
+
+  printf("%s %s, %u\n", instruction_name, destination, number);
+  return EXIT_SUCCESS;
+}
+
 struct instruction {
   unsigned char mask;
   unsigned char value;
@@ -244,24 +328,24 @@ int main(int argc, char *argv[]) {
       {.mask = 0b11110000, .value = 0b10110000},
       // mov reg reg/mem with optional displacement
       {.mask = 0b11111100, .value = 0b10001000},
-      // // mov immediate to memory/reg with optional displacement
-      // {.mask = 0b11111110, .value = 0b11000110},
+      // mov immediate to memory/reg with optional displacement
+      {.mask = 0b11111110, .value = 0b11000110},
       // add reg reg/mem with optional displacement
       {.mask = 0b11111100, .value = 0b00000000},
       // add immmediate to register
-      // {.mask = 0b11111100, .value = 0b10000000},
+      {.mask = 0b11111100, .value = 0b10000000},
 
   };
 
-  // char *instruction_names[] = {"mov", "mov", "mov", "add"};
-  char *instruction_names[] = {"mov", "mov", "add"};
+  char *instruction_names[] = {"mov", "mov", "mov", "add", "add"};
 
   int (*decoders[])(unsigned char instruction_byte, FILE *executable,
                     const char *instruction_name) = {
-      decode_instruction_immediate_to_reg, // mov ax, 6
-      decode_instruction_reg_mem_reg,      // mov ax, [bp + 2]
-      // decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
-      decode_instruction_reg_mem_reg, // add ax, [bp +2]
+      decode_instruction_immediate_to_reg,        // mov ax, 6
+      decode_instruction_reg_mem_reg,             // mov ax, [bp + 2]
+      decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
+      decode_instruction_reg_mem_reg,             // add ax, [bp +2]
+      decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
   };
 
   size_t decoders_count = sizeof(decoders) / sizeof(decoders[0]);
