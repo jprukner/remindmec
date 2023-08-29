@@ -58,7 +58,7 @@ static const char *register_word_map[][8] = {
 int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
                            FILE *executable) {
   if (n_bytes != 2 && n_bytes != 1) {
-    fprintf(stderr, "expected 1 or 2 bytes to read, got %u\n", n_bytes);
+    fprintf(stderr, "expected 1 or 2 bytes to read, got %lu\n", n_bytes);
     return -1;
   }
   unsigned char buffer[2] = {0};
@@ -124,7 +124,7 @@ static const char *memory_displacement_expresion_table[][8] = {
         "[bp + di]",
         "[si]",
         "[di]",
-        "%s",
+        "[%u]",
         "[bx]",
     },
     {
@@ -170,9 +170,8 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
   n = snprintf(formated_displacement_output, formated_displacement_output_legth,
                displacement_template, displacement);
 
-  fprintf(stderr, "%s\n", formated_displacement_output);
   if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
-    fprintf(stderr, "failed to format displacement, n is %lu\n", n);
+    fprintf(stderr, "failed to format displacement, n is %d\n", n);
     return -1;
   }
   return 1;
@@ -233,10 +232,10 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction_name, mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
-    n = load_n_bytes_displacement(
+    int status = load_n_bytes_displacement(
         mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source, executable);
-    if (n < 0) {
+    if (status < 0) {
       return EXIT_FAILURE;
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
@@ -295,7 +294,20 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
             instruction_name);
     destination = memory_displacement_expresion_table[mode][reg_mem];
     size_modifier = size_modifiers[word];
-    // TODO handle specail case for MODE=0b110 - direct address.
+    if (reg_mem == 6) {
+      // handle specail case for MODE=0b110 - direct address.
+      fprintf(stderr,
+              "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
+              instruction_name);
+      int n = load_n_bytes_displacement(
+          2, displacement_formated_buffer,
+          UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
+          executable);
+      if (n < 0) {
+        return EXIT_FAILURE;
+      }
+      destination = displacement_formated_buffer;
+    }
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
@@ -304,7 +316,7 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction_name, mode);
     destination = memory_displacement_expresion_table[mode][reg_mem];
-    size_t n = load_n_bytes_displacement(
+    int n = load_n_bytes_displacement(
         mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
         executable);
@@ -325,7 +337,7 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   } else {
     size = 1;
   }
-  size_t n = read_n_bytes_as_number(size, &number, executable);
+  int n = read_n_bytes_as_number(size, &number, executable);
   if (n < 0) {
     return EXIT_FAILURE;
   }
@@ -370,6 +382,10 @@ int main(int argc, char *argv[]) {
           {.mask = 0b11111110, .value = 0b00101100},
           // sub reg reg/mem with optional displacement
           {.mask = 0b11111100, .value = 0b00101000},
+          // cmp immediate and accumulator
+          {.mask = 0b11111110, .value = 0b00111100},
+          // cmp reg and reg/mem with optional displacement
+          {.mask = 0b11111100, .value = 0b00111000},
       };
   struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
       // mov immediate to memory/reg with optional displacement
@@ -380,13 +396,21 @@ int main(int argc, char *argv[]) {
 
       // sub immmediate from register/memory
       {.mask = 0b1111110000111000, .value = 0b1000000000101000},
+
+      // cmp immmediate and register/memory
+      {.mask = 0b1111110000111000, .value = 0b1000000000111000},
   };
 
   char *instruction_names_single_byte_prefix[] = {
-      "mov", "mov", "add", "add", "sub", "sub",
+      "mov", "mov", "add", "add", "sub", "sub", "cmp", "cmp",
   };
 
-  char *instruction_names_two_byte_prefix[] = {"mov", "add", "sub"};
+  char *instruction_names_two_byte_prefix[] = {
+      "mov",
+      "add",
+      "sub",
+      "cmp",
+  };
 
   int (*single_byte_instruction_prefix_decoders[])(
       unsigned char instruction_byte, FILE *executable,
@@ -397,6 +421,8 @@ int main(int argc, char *argv[]) {
       decode_instruction_reg_mem_reg,              // add ax, [bp +2]
       decode_instruction_immediate_to_accumulator, // sub ax, 7
       decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
+      decode_instruction_immediate_to_accumulator, // cmp ax, 7
+      decode_instruction_reg_mem_reg,              // cmp ax, [bp +2]
   };
 
   int (*two_byte_instruction_prefix_decoders[])(
@@ -405,13 +431,14 @@ int main(int argc, char *argv[]) {
       decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
       decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
       decode_instruction_immediate_to_memory_reg, // sub [bp + 2], 7
+      decode_instruction_immediate_to_memory_reg, // cmp [bp + 2], 7
   };
 
-  size_t single_byte_decoders_count =
+  uint64_t single_byte_decoders_count =
       sizeof(single_byte_instruction_prefix_decoders) /
       sizeof(single_byte_instruction_prefix_decoders[0]);
 
-  size_t two_byte_decoders_count =
+  uint64_t two_byte_decoders_count =
       sizeof(two_byte_instruction_prefix_decoders) /
       sizeof(two_byte_instruction_prefix_decoders[0]);
 
@@ -422,7 +449,7 @@ int main(int argc, char *argv[]) {
 
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
-    for (int i = 0; i < single_byte_decoders_count; i++) {
+    for (uint64_t i = 0; i < single_byte_decoders_count; i++) {
       unsigned char opcode_mask =
           instruction_opcode_single_byte_prefixes[i].mask;
       unsigned char opcode_prefix =
@@ -458,7 +485,7 @@ int main(int argc, char *argv[]) {
     instruction_word = instruction_word | ((uint16_t)instruction_byte);
     debug_uint16_as_binary("first two instruction bytes as binary: ",
                            instruction_word);
-    for (int i = 0; i < two_byte_decoders_count; i++) {
+    for (uint64_t i = 0; i < two_byte_decoders_count; i++) {
       uint16_t opcode_mask = instruction_opcode_two_byte_prefixes[i].mask;
       uint16_t opcode_prefix = instruction_opcode_two_byte_prefixes[i].value;
       debug_uint16_as_binary("trying following prefix: ", opcode_prefix);
