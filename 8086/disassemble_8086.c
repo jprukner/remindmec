@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
@@ -34,6 +35,16 @@ void print_byte_as_binary(unsigned char input) {
 
 void debug_byte_as_binary(const char *message, unsigned char byte) {
   fprintf(stderr, message);
+  print_byte_as_binary(byte);
+  fprintf(stderr, "\n");
+}
+
+void debug_uint16_as_binary(const char *message, uint16_t word) {
+  fprintf(stderr, message);
+  unsigned char byte = (unsigned char)((word & 0xff00) >> 8);
+  print_byte_as_binary(byte);
+  fprintf(stderr, "|");
+  byte = (unsigned char)(word & 0x00ff);
   print_byte_as_binary(byte);
   fprintf(stderr, "\n");
 }
@@ -88,7 +99,7 @@ int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
 int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
                                                 FILE *executable,
                                                 const char *instruction_name) {
-  fprintf(stderr, "this is %s immediate to reg\n", instruction_name);
+  fprintf(stderr, "this is %s immediate to accumulator\n", instruction_name);
   const unsigned char word_mask = 0x01;
   unsigned char word = instruction_byte & word_mask;
 
@@ -98,8 +109,9 @@ int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
   if (n < 0) {
     return EXIT_FAILURE;
   }
+  static const char *accumulator_registers[] = {"al", "ax"};
 
-  printf("%s ax, %u\n", instruction_name, number);
+  printf("%s %s, %u\n", instruction_name, accumulator_registers[word], number);
 
   return EXIT_SUCCESS;
 }
@@ -244,32 +256,24 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
-int decode_instruction_immediate_to_memory_reg(unsigned char instruction_byte,
+int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
                                                FILE *executable,
                                                const char *instruction_name) {
-  const unsigned char word_mask = 0x01;
-  const unsigned char sign_extension_mask = 0x02;
-  const unsigned char mode_mask = 0xc0;
-  const unsigned char register_memory_mask = 0x07;
+  const uint16_t word_mask = 0x0100;
+  const uint16_t sign_extension_mask = 0x0200;
+  const uint16_t mode_mask = 0x00c0;
+  const uint16_t register_memory_mask = 0x0007;
 
   fprintf(stderr, "it's %s type 'Immediate to register/memory' \n",
           instruction_name);
 
-  unsigned char word = instruction_byte & word_mask;
-  unsigned char sign_extension = (instruction_byte & sign_extension_mask) >> 1;
+  unsigned char word = (instruction_word & word_mask) >> 8;
+  unsigned char sign_extension = (instruction_word & sign_extension_mask) >> 9;
   fprintf(stderr, "word is %u\n", word);
+  fprintf(stderr, "sign_extension is %u\n", sign_extension);
 
-  size_t n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
-  if (n != 1) {
-    fprintf(stderr,
-            "expected one byte for %s instruction to be complete, got none\n",
-            instruction_name);
-    return EXIT_FAILURE;
-  }
-  debug_byte_as_binary("next byte as binary: ", instruction_byte);
-
-  unsigned char mode = (instruction_byte & mode_mask) >> 6;
-  unsigned char reg_mem = instruction_byte & register_memory_mask;
+  unsigned char mode = (instruction_word & mode_mask) >> 6;
+  unsigned char reg_mem = instruction_word & register_memory_mask;
   debug_byte_as_binary("reg/mem:", reg_mem);
 
   const char *destination = NULL;
@@ -296,7 +300,7 @@ int decode_instruction_immediate_to_memory_reg(unsigned char instruction_byte,
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction_name, mode);
     destination = memory_displacement_expresion_table[mode][reg_mem];
-    n = load_n_bytes_displacement(
+    size_t n = load_n_bytes_displacement(
         mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
         executable);
@@ -316,7 +320,7 @@ int decode_instruction_immediate_to_memory_reg(unsigned char instruction_byte,
   } else {
     size = 1;
   }
-  n = read_n_bytes_as_number(size, &number, executable);
+  size_t n = read_n_bytes_as_number(size, &number, executable);
   if (n < 0) {
     return EXIT_FAILURE;
   }
@@ -325,9 +329,14 @@ int decode_instruction_immediate_to_memory_reg(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
-struct instruction {
+struct single_byte_prefix_instruction {
   unsigned char mask;
   unsigned char value;
+};
+
+struct two_byte_prefix_instruction {
+  uint16_t mask;
+  uint16_t value;
 };
 
 int main(int argc, char *argv[]) {
@@ -342,34 +351,53 @@ int main(int argc, char *argv[]) {
   FILE *executable = fopen(argv[1], "rb");
   unsigned char instruction_byte;
 
-  struct instruction instruction_opcode_prefixes[] = {
-      // mov immmediate to register
-      {.mask = 0b11110000, .value = 0b10110000},
-      // mov reg reg/mem with optional displacement
-      {.mask = 0b11111100, .value = 0b10001000},
+  struct single_byte_prefix_instruction
+      instruction_opcode_single_byte_prefixes[] = {
+          // mov immmediate to register
+          {.mask = 0b11110000, .value = 0b10110000},
+          // mov reg reg/mem with optional displacement
+          {.mask = 0b11111100, .value = 0b10001000},
+          // add immediate to accumulator
+          {.mask = 0b11111110, .value = 0b00000100},
+          // add reg reg/mem with optional displacement
+          {.mask = 0b11111100, .value = 0b00000000},
+      };
+  struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
       // mov immediate to memory/reg with optional displacement
-      {.mask = 0b11111110, .value = 0b11000110},
-      // add reg reg/mem with optional displacement
-      {.mask = 0b11111100, .value = 0b00000000},
-      // add immmediate to register
-      {.mask = 0b11111100, .value = 0b10000000},
-      // add immediate to accumulator
-      {.mask = 0b11111110, .value = 0b00000100},
+      {.mask = 0b1111111000111000, .value = 0b1100011000000000},
+
+      // add immmediate to register/memory
+      {.mask = 0b1111110000000000, .value = 0b1000000000000000},
+
   };
 
-  char *instruction_names[] = {"mov", "mov", "mov", "add", "add", "add"};
+  char *instruction_names_single_byte_prefix[] = {"mov", "mov", "add", "add"};
 
-  int (*decoders[])(unsigned char instruction_byte, FILE *executable,
-                    const char *instruction_name) = {
+  char *instruction_names_two_byte_prefix[] = {"mov", "add"};
+
+  int (*single_byte_instruction_prefix_decoders[])(
+      unsigned char instruction_byte, FILE *executable,
+      const char *instruction_name) = {
       decode_instruction_immediate_to_reg,         // mov bx, 6
       decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
-      decode_instruction_immediate_to_memory_reg,  // mov [bp + 2], 7
-      decode_instruction_reg_mem_reg,              // add ax, [bp +2]
-      decode_instruction_immediate_to_memory_reg,  // add [bp + 2], 7
       decode_instruction_immediate_to_accumulator, // add ax, 7
+      decode_instruction_reg_mem_reg,              // add ax, [bp +2]
   };
 
-  size_t decoders_count = sizeof(decoders) / sizeof(decoders[0]);
+  int (*two_byte_instruction_prefix_decoders[])(
+      uint16_t instruction_bytes, FILE * executable,
+      const char *instruction_name) = {
+      decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
+      decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
+  };
+
+  size_t single_byte_decoders_count =
+      sizeof(single_byte_instruction_prefix_decoders) /
+      sizeof(single_byte_instruction_prefix_decoders[0]);
+
+  size_t two_byte_decoders_count =
+      sizeof(two_byte_instruction_prefix_decoders) /
+      sizeof(two_byte_instruction_prefix_decoders[0]);
 
   int exit_code = EXIT_SUCCESS;
   printf("bits 16\n\n");
@@ -378,20 +406,57 @@ int main(int argc, char *argv[]) {
 
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
-    for (int i = 0; i < decoders_count; i++) {
-      unsigned char opcode_mask = instruction_opcode_prefixes[i].mask;
-      unsigned char opcode_prefix = instruction_opcode_prefixes[i].value;
+    for (int i = 0; i < single_byte_decoders_count; i++) {
+      unsigned char opcode_mask =
+          instruction_opcode_single_byte_prefixes[i].mask;
+      unsigned char opcode_prefix =
+          instruction_opcode_single_byte_prefixes[i].value;
       debug_byte_as_binary("trying following prefix:", opcode_prefix);
       if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
-        exit_code =
-            decoders[i](instruction_byte, executable, instruction_names[i]);
+        exit_code = single_byte_instruction_prefix_decoders[i](
+            instruction_byte, executable,
+            instruction_names_single_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }
         break;
       }
     }
+    if (found == 1) {
+      continue;
+    }
+    uint16_t instruction_word = 0;
+    instruction_word = instruction_word | ((uint16_t)(instruction_byte) << 8);
+    // Load next byte so we can decide on two byte prefix when one byte prefix
+    // failed.
+    size_t n =
+        fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
+    if (n != 1) {
+      fprintf(stderr,
+              "failed to load next byte befor testing for two byte "
+              "instructions prefixes, n is %lu",
+              n);
+      return EXIT_FAILURE;
+    }
+    instruction_word = instruction_word | ((uint16_t)instruction_byte);
+    debug_uint16_as_binary("first two instruction bytes as binary: ",
+                           instruction_word);
+    for (int i = 0; i < two_byte_decoders_count; i++) {
+      uint16_t opcode_mask = instruction_opcode_two_byte_prefixes[i].mask;
+      uint16_t opcode_prefix = instruction_opcode_two_byte_prefixes[i].value;
+      debug_uint16_as_binary("trying following prefix: ", opcode_prefix);
+      if ((instruction_word & opcode_mask) == opcode_prefix) {
+        found = 1;
+        exit_code = two_byte_instruction_prefix_decoders[i](
+            instruction_word, executable, instruction_names_two_byte_prefix[i]);
+        if (exit_code != EXIT_SUCCESS) {
+          goto exit;
+        }
+        break;
+      }
+    }
+
     if (found == 0) {
       fprintf(stderr, "no decoder exists for this instruction\n");
       exit_code = EXIT_FAILURE;
