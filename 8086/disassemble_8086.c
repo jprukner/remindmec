@@ -405,6 +405,45 @@ int main(int argc, char *argv[]) {
           {.mask = 0b11111100, .value = 0b00111000},
           // jnz
           {.mask = 0b11111111, .value = 0b01110101},
+          // jl
+          {.mask = 0b11111111, .value = 0b01111100},
+          // jle
+          {.mask = 0b11111111, .value = 0b01111110},
+          // jb
+          {.mask = 0b11111111, .value = 0b01110010},
+          // jbe
+          {.mask = 0b11111111, .value = 0b01110110},
+          // jp
+          {.mask = 0b11111111, .value = 0b01111010},
+          // jo
+          {.mask = 0b11111111, .value = 0b01110000},
+          // js
+          {.mask = 0b11111111, .value = 0b01111000},
+          // jnl
+          {.mask = 0b11111111, .value = 0b01111101},
+          // jg
+          {.mask = 0b11111111, .value = 0b01111111},
+          // jnb
+          {.mask = 0b11111111, .value = 0b01110011},
+          // ja
+          {.mask = 0b11111111, .value = 0b01110111},
+          // jnp
+          {.mask = 0b11111111, .value = 0b01111011},
+          // jno
+          {.mask = 0b11111111, .value = 0b01110001},
+          // jns
+          {.mask = 0b11111111, .value = 0b01111001},
+          // loop
+          {.mask = 0b11111111, .value = 0b11100010},
+          // loopz
+          {.mask = 0b11111111, .value = 0b11100001},
+          // loopnz
+          {.mask = 0b11111111, .value = 0b11100000},
+          // jcxz
+          {.mask = 0b11111111, .value = 0b11100011},
+          // jz
+          {.mask = 0b11111111, .value = 0b01110100},
+
       };
   struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
       // mov immediate to memory/reg with optional displacement
@@ -421,7 +460,10 @@ int main(int argc, char *argv[]) {
   };
 
   char *instruction_names_single_byte_prefix[] = {
-      "mov", "mov", "add", "add", "sub", "sub", "cmp", "cmp", "jnz",
+      "mov", "mov", "add",  "add",   "sub",    "sub",  "cmp",
+      "cmp", "jnz", "jl",   "jle",   "jb",     "jbe",  "jp",
+      "jo",  "js",  "jnl",  "jg",    "jnb",    "ja",   "jnp",
+      "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz",
   };
 
   char *instruction_names_two_byte_prefix[] = {
@@ -442,6 +484,25 @@ int main(int argc, char *argv[]) {
       decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
       decode_instruction_immediate_to_accumulator, // cmp ax, 7
       decode_instruction_reg_mem_reg,              // cmp ax, [bp +2]
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
+      decode_jump_instruction,
       decode_jump_instruction,
   };
 
