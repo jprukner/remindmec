@@ -264,6 +264,8 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   const uint16_t mode_mask = 0x00c0;
   const uint16_t register_memory_mask = 0x0007;
 
+  static const char *size_modifiers[] = {"byte", "word"};
+
   fprintf(stderr, "it's %s type 'Immediate to register/memory' \n",
           instruction_name);
 
@@ -277,6 +279,7 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   debug_byte_as_binary("reg/mem:", reg_mem);
 
   const char *destination = NULL;
+  const char *size_modifier = "";
   uint16_t number = 0;
 
   char displacement_formated_buffer
@@ -320,12 +323,15 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   } else {
     size = 1;
   }
+  if (mode != INSTRUCTION_MODE_REGISTER) {
+    size_modifier = size_modifiers[word];
+  }
   size_t n = read_n_bytes_as_number(size, &number, executable);
   if (n < 0) {
     return EXIT_FAILURE;
   }
-
-  printf("%s %s, %u\n", instruction_name, destination, number);
+  printf("%s %s %s, %u\n", instruction_name, size_modifier, destination,
+         number);
   return EXIT_SUCCESS;
 }
 
