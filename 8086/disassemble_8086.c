@@ -116,6 +116,23 @@ int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
+int decode_jump_instruction(unsigned char instruction_byte, FILE *executable,
+                            const char *instruction_name) {
+  fprintf(stderr, "this is %s\n", instruction_name);
+
+  int8_t number = 0;
+
+  if (fread(&number, sizeof(int8_t), 1, executable) != 1) {
+    fprintf(stderr, "failed to read next byte for %s instruction\n",
+            instruction_name);
+    return EXIT_FAILURE;
+  }
+
+  printf("%s %d\n", instruction_name, number);
+
+  return EXIT_SUCCESS;
+}
+
 static const char *memory_displacement_expresion_table[][8] = {
     {
         "[bx + si]",
@@ -386,6 +403,8 @@ int main(int argc, char *argv[]) {
           {.mask = 0b11111110, .value = 0b00111100},
           // cmp reg and reg/mem with optional displacement
           {.mask = 0b11111100, .value = 0b00111000},
+          // jnz
+          {.mask = 0b11111111, .value = 0b01110101},
       };
   struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
       // mov immediate to memory/reg with optional displacement
@@ -402,7 +421,7 @@ int main(int argc, char *argv[]) {
   };
 
   char *instruction_names_single_byte_prefix[] = {
-      "mov", "mov", "add", "add", "sub", "sub", "cmp", "cmp",
+      "mov", "mov", "add", "add", "sub", "sub", "cmp", "cmp", "jnz",
   };
 
   char *instruction_names_two_byte_prefix[] = {
@@ -423,6 +442,7 @@ int main(int argc, char *argv[]) {
       decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
       decode_instruction_immediate_to_accumulator, // cmp ax, 7
       decode_instruction_reg_mem_reg,              // cmp ax, [bp +2]
+      decode_jump_instruction,
   };
 
   int (*two_byte_instruction_prefix_decoders[])(
