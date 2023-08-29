@@ -294,6 +294,7 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction_name);
     destination = memory_displacement_expresion_table[mode][reg_mem];
+    size_modifier = size_modifiers[word];
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
@@ -312,6 +313,7 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
     destination = displacement_formated_buffer;
+    size_modifier = size_modifiers[word];
     break;
   default:
     debug_byte_as_binary("unknown mode: ", mode);
@@ -322,9 +324,6 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
     size = 2;
   } else {
     size = 1;
-  }
-  if (mode != INSTRUCTION_MODE_REGISTER) {
-    size_modifier = size_modifiers[word];
   }
   size_t n = read_n_bytes_as_number(size, &number, executable);
   if (n < 0) {
