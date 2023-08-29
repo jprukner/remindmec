@@ -367,19 +367,27 @@ int main(int argc, char *argv[]) {
           {.mask = 0b11111110, .value = 0b00000100},
           // add reg reg/mem with optional displacement
           {.mask = 0b11111100, .value = 0b00000000},
+          // sub immediate from accumulator
+          {.mask = 0b11111110, .value = 0b00101100},
+          // sub reg reg/mem with optional displacement
+          {.mask = 0b11111100, .value = 0b00101000},
       };
   struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
       // mov immediate to memory/reg with optional displacement
       {.mask = 0b1111111000111000, .value = 0b1100011000000000},
 
       // add immmediate to register/memory
-      {.mask = 0b1111110000000000, .value = 0b1000000000000000},
+      {.mask = 0b1111110000111000, .value = 0b1000000000000000},
 
+      // sub immmediate from register/memory
+      {.mask = 0b1111110000111000, .value = 0b1000000000101000},
   };
 
-  char *instruction_names_single_byte_prefix[] = {"mov", "mov", "add", "add"};
+  char *instruction_names_single_byte_prefix[] = {
+      "mov", "mov", "add", "add", "sub", "sub",
+  };
 
-  char *instruction_names_two_byte_prefix[] = {"mov", "add"};
+  char *instruction_names_two_byte_prefix[] = {"mov", "add", "sub"};
 
   int (*single_byte_instruction_prefix_decoders[])(
       unsigned char instruction_byte, FILE *executable,
@@ -388,6 +396,8 @@ int main(int argc, char *argv[]) {
       decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
       decode_instruction_immediate_to_accumulator, // add ax, 7
       decode_instruction_reg_mem_reg,              // add ax, [bp +2]
+      decode_instruction_immediate_to_accumulator, // sub ax, 7
+      decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
   };
 
   int (*two_byte_instruction_prefix_decoders[])(
@@ -395,6 +405,7 @@ int main(int argc, char *argv[]) {
       const char *instruction_name) = {
       decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
       decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
+      decode_instruction_immediate_to_memory_reg, // sub [bp + 2], 7
   };
 
   size_t single_byte_decoders_count =
