@@ -182,6 +182,29 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   case INSTRUCTION_MODE_REGISTER:
     fprintf(stderr, "%s mode: Register Mode\n", instruction_name);
     source = register_word_map[word][reg_mem];
+    // simulate
+    // TODO THIS SIMULATION DOES NOT TAKE THE DIRECTION BIT INTO ACCOUNT.
+    uint8_t source_register_index = reg;
+    uint8_t destination_register_index = reg_mem;
+    uint16_t number = 0;
+    if (word == 0) {
+      if (source_register_index > 3) {
+        source_register_index = source_register_index - 4;
+        number = (ctx->registers[source_register_index] & 0xff00) >> 8;
+      } else {
+        number = (ctx->registers[source_register_index] & 0x00ff);
+      }
+      if (destination_register_index > 3) {
+        destination_register_index = destination_register_index - 4;
+        number = number << 8;
+      }
+      ctx->registers[destination_register_index] =
+          ctx->registers[destination_register_index] | number;
+    } else {
+      number = ctx->registers[source_register_index];
+      ctx->registers[destination_register_index] = number;
+    }
+
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
