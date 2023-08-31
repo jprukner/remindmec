@@ -1,6 +1,12 @@
 // main takes one argument and that is a path to binary file of 8086 executable.
 // It prints out assembly instructions in a format that can be again fed to nasm
-// assembler.
+// assembler. Also it simulates the given instructions and prints vaules of
+// registers at the end of the disassembled output.
+
+#include "simulate_8086_ISA.h"
+#include "debug_output.c"
+#include "tables.c"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,46 +20,6 @@
 #define INSTRUCTION_MODE_REGISTER 3
 #define UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH 18
 
-void print_byte_as_binary(unsigned char input) {
-  char output[(sizeof(input) * 8) + 1] = {0};
-  int sizeof_input_bits = sizeof(input) * 8;
-  int bit_position = sizeof_input_bits - 1;
-  while (bit_position >= 0) {
-    uint16_t mask = 1 << bit_position;
-    if ((input & mask) > 0) {
-
-      output[sizeof_input_bits - 1 - bit_position] = '1';
-    } else {
-      output[sizeof_input_bits - 1 - bit_position] = '0';
-    }
-    bit_position = bit_position - 1;
-  }
-  output[sizeof_input_bits] = '\0';
-  fprintf(stderr, "%s", output);
-  return;
-}
-
-void debug_byte_as_binary(const char *message, unsigned char byte) {
-  fprintf(stderr, message);
-  print_byte_as_binary(byte);
-  fprintf(stderr, "\n");
-}
-
-void debug_uint16_as_binary(const char *message, uint16_t word) {
-  fprintf(stderr, message);
-  unsigned char byte = (unsigned char)((word & 0xff00) >> 8);
-  print_byte_as_binary(byte);
-  fprintf(stderr, "|");
-  byte = (unsigned char)(word & 0x00ff);
-  print_byte_as_binary(byte);
-  fprintf(stderr, "\n");
-}
-
-static const char *register_word_map[][8] = {
-    {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"},
-    {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"},
-};
-
 // read one or two bytes based on n_bytes variable
 int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
                            FILE *executable) {
@@ -61,7 +27,7 @@ int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
     fprintf(stderr, "expected 1 or 2 bytes to read, got %lu\n", n_bytes);
     return -1;
   }
-  unsigned char buffer[2] = {0};
+  uint8_t buffer[2] = {0};
   if (fread(buffer, n_bytes, 1, executable) != 1) {
     fprintf(stderr, "failed to read %lu bytes\n", n_bytes);
     return -1;
@@ -75,14 +41,15 @@ int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
   return 1;
 }
 
-int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
+int decode_instruction_immediate_to_reg(struct context *ctx,
+                                        uint8_t instruction_byte,
                                         FILE *executable,
                                         const char *instruction_name) {
   fprintf(stderr, "this is %s immediate to reg\n", instruction_name);
-  const unsigned char word_mask = 0x08;
-  const unsigned char register_mask = 0x07;
-  unsigned char word = (instruction_byte & word_mask) >> 3;
-  unsigned char reg = instruction_byte & register_mask;
+  const uint8_t word_mask = 0x08;
+  const uint8_t register_mask = 0x07;
+  uint8_t word = (instruction_byte & word_mask) >> 3;
+  uint8_t reg = instruction_byte & register_mask;
 
   uint16_t number = 0;
   size_t size = (word + 1);
@@ -91,17 +58,32 @@ int decode_instruction_immediate_to_reg(unsigned char instruction_byte,
     return EXIT_FAILURE;
   }
 
+  // print
   printf("%s %s, %u\n", instruction_name, register_word_map[word][reg], number);
+
+  // simulate
+  uint8_t register_index = reg;
+
+  if (word == 0) {
+    if (reg > 3) {
+      register_index = reg - 4;
+      number = number << 8;
+    }
+    ctx->registers[register_index] = ctx->registers[register_index] | number;
+  } else {
+    ctx->registers[register_index] = number;
+  }
 
   return EXIT_SUCCESS;
 }
 
-int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
+int decode_instruction_immediate_to_accumulator(struct context *ctx,
+                                                uint8_t instruction_byte,
                                                 FILE *executable,
                                                 const char *instruction_name) {
   fprintf(stderr, "this is %s immediate to accumulator\n", instruction_name);
-  const unsigned char word_mask = 0x01;
-  unsigned char word = instruction_byte & word_mask;
+  const uint8_t word_mask = 0x01;
+  uint8_t word = instruction_byte & word_mask;
 
   uint16_t number = 0;
   size_t size = (word + 1);
@@ -109,15 +91,14 @@ int decode_instruction_immediate_to_accumulator(unsigned char instruction_byte,
   if (n < 0) {
     return EXIT_FAILURE;
   }
-  static const char *accumulator_registers[] = {"al", "ax"};
 
   printf("%s %s, %u\n", instruction_name, accumulator_registers[word], number);
 
   return EXIT_SUCCESS;
 }
 
-int decode_jump_instruction(unsigned char instruction_byte, FILE *executable,
-                            const char *instruction_name) {
+int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
+                            FILE *executable, const char *instruction_name) {
   fprintf(stderr, "this is %s\n", instruction_name);
 
   int8_t number = 0;
@@ -132,40 +113,6 @@ int decode_jump_instruction(unsigned char instruction_byte, FILE *executable,
 
   return EXIT_SUCCESS;
 }
-
-static const char *memory_displacement_expresion_table[][8] = {
-    {
-        "[bx + si]",
-        "[bx + di]",
-        "[bp + si]",
-        "[bp + di]",
-        "[si]",
-        "[di]",
-        "[%u]",
-        "[bx]",
-    },
-    {
-        "[bx + si + %u]",
-        "[bx + di + %u]",
-        "[bp + si + %u]",
-        "[bp + di + %u]",
-        "[si + %u]",
-        "[di + %u]",
-        "[bp + %u]",
-        "[bx + %u]",
-    },
-    {
-        "[bx + si + %u]",
-        "[bx + di + %u]",
-        "[bp + si + %u]",
-        "[bp + di + %u]",
-        "[si + %u]",
-        "[di + %u]",
-        "[bp + %u]",
-        "[bx + %u]",
-    },
-};
-
 int load_n_bytes_displacement(uint8_t n_bytes_displacement,
                               char formated_displacement_output[],
                               uint8_t formated_displacement_output_legth,
@@ -194,19 +141,19 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
   return 1;
 }
 
-int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
-                                   FILE *executable,
+int decode_instruction_reg_mem_reg(struct context *ctx,
+                                   uint8_t instruction_byte, FILE *executable,
                                    const char *instruction_name) {
-  const unsigned char direction_mask = 0x02;
-  const unsigned char word_mask = 0x01;
-  const unsigned char mode_mask = 0xc0;
-  const unsigned char register_mask = 0x38;
-  const unsigned char register_memory_mask = 0x07;
+  const uint8_t direction_mask = 0x02;
+  const uint8_t word_mask = 0x01;
+  const uint8_t mode_mask = 0xc0;
+  const uint8_t register_mask = 0x38;
+  const uint8_t register_memory_mask = 0x07;
 
   fprintf(stderr, "it's %s type 'Register/memory to/from register' \n",
           instruction_name);
-  unsigned char direction = (instruction_byte & direction_mask) >> 1;
-  unsigned char word = instruction_byte & word_mask;
+  uint8_t direction = (instruction_byte & direction_mask) >> 1;
+  uint8_t word = instruction_byte & word_mask;
   fprintf(stderr, "direction is %u\n", direction);
   fprintf(stderr, "word is %u\n", word);
 
@@ -219,9 +166,9 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
   }
   debug_byte_as_binary("next byte as binary: ", instruction_byte);
 
-  unsigned char mode = (instruction_byte & mode_mask) >> 6;
-  unsigned char reg = (instruction_byte & register_mask) >> 3;
-  unsigned char reg_mem = instruction_byte & register_memory_mask;
+  uint8_t mode = (instruction_byte & mode_mask) >> 6;
+  uint8_t reg = (instruction_byte & register_mask) >> 3;
+  uint8_t reg_mem = instruction_byte & register_memory_mask;
   debug_byte_as_binary("reg:", reg);
   debug_byte_as_binary("reg/mem:", reg_mem);
 
@@ -272,7 +219,8 @@ int decode_instruction_reg_mem_reg(unsigned char instruction_byte,
   return EXIT_SUCCESS;
 }
 
-int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
+int decode_instruction_immediate_to_memory_reg(struct context *ctx,
+                                               uint16_t instruction_word,
                                                FILE *executable,
                                                const char *instruction_name) {
   const uint16_t word_mask = 0x0100;
@@ -280,18 +228,16 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   const uint16_t mode_mask = 0x00c0;
   const uint16_t register_memory_mask = 0x0007;
 
-  static const char *size_modifiers[] = {"byte", "word"};
-
   fprintf(stderr, "it's %s type 'Immediate to register/memory' \n",
           instruction_name);
 
-  unsigned char word = (instruction_word & word_mask) >> 8;
-  unsigned char sign_extension = (instruction_word & sign_extension_mask) >> 9;
+  uint8_t word = (instruction_word & word_mask) >> 8;
+  uint8_t sign_extension = (instruction_word & sign_extension_mask) >> 9;
   fprintf(stderr, "word is %u\n", word);
   fprintf(stderr, "sign_extension is %u\n", sign_extension);
 
-  unsigned char mode = (instruction_word & mode_mask) >> 6;
-  unsigned char reg_mem = instruction_word & register_memory_mask;
+  uint8_t mode = (instruction_word & mode_mask) >> 6;
+  uint8_t reg_mem = instruction_word & register_memory_mask;
   debug_byte_as_binary("reg/mem:", reg_mem);
 
   const char *destination = NULL;
@@ -363,157 +309,26 @@ int decode_instruction_immediate_to_memory_reg(uint16_t instruction_word,
   return EXIT_SUCCESS;
 }
 
-struct single_byte_prefix_instruction {
-  unsigned char mask;
-  unsigned char value;
-};
-
-struct two_byte_prefix_instruction {
-  uint16_t mask;
-  uint16_t value;
-};
-
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
+  if (argc > 3 || argc < 2) {
     fprintf(
         stderr,
-        "%s expects exactly one 8086 executable path %d arguments were given\n",
+        "%s expects optional '-exec' flag and mandatory 8086 executable path "
+        "%d arguments were given\n",
         argv[0], argc - 1);
     return EXIT_FAILURE;
   }
-  fprintf(stderr, "disassembling file %s\n", argv[1]);
-  FILE *executable = fopen(argv[1], "rb");
-  unsigned char instruction_byte;
-
-  struct single_byte_prefix_instruction
-      instruction_opcode_single_byte_prefixes[] = {
-          // mov immmediate to register
-          {.mask = 0b11110000, .value = 0b10110000},
-          // mov reg reg/mem with optional displacement
-          {.mask = 0b11111100, .value = 0b10001000},
-          // add immediate to accumulator
-          {.mask = 0b11111110, .value = 0b00000100},
-          // add reg reg/mem with optional displacement
-          {.mask = 0b11111100, .value = 0b00000000},
-          // sub immediate from accumulator
-          {.mask = 0b11111110, .value = 0b00101100},
-          // sub reg reg/mem with optional displacement
-          {.mask = 0b11111100, .value = 0b00101000},
-          // cmp immediate and accumulator
-          {.mask = 0b11111110, .value = 0b00111100},
-          // cmp reg and reg/mem with optional displacement
-          {.mask = 0b11111100, .value = 0b00111000},
-          // jnz
-          {.mask = 0b11111111, .value = 0b01110101},
-          // jl
-          {.mask = 0b11111111, .value = 0b01111100},
-          // jle
-          {.mask = 0b11111111, .value = 0b01111110},
-          // jb
-          {.mask = 0b11111111, .value = 0b01110010},
-          // jbe
-          {.mask = 0b11111111, .value = 0b01110110},
-          // jp
-          {.mask = 0b11111111, .value = 0b01111010},
-          // jo
-          {.mask = 0b11111111, .value = 0b01110000},
-          // js
-          {.mask = 0b11111111, .value = 0b01111000},
-          // jnl
-          {.mask = 0b11111111, .value = 0b01111101},
-          // jg
-          {.mask = 0b11111111, .value = 0b01111111},
-          // jnb
-          {.mask = 0b11111111, .value = 0b01110011},
-          // ja
-          {.mask = 0b11111111, .value = 0b01110111},
-          // jnp
-          {.mask = 0b11111111, .value = 0b01111011},
-          // jno
-          {.mask = 0b11111111, .value = 0b01110001},
-          // jns
-          {.mask = 0b11111111, .value = 0b01111001},
-          // loop
-          {.mask = 0b11111111, .value = 0b11100010},
-          // loopz
-          {.mask = 0b11111111, .value = 0b11100001},
-          // loopnz
-          {.mask = 0b11111111, .value = 0b11100000},
-          // jcxz
-          {.mask = 0b11111111, .value = 0b11100011},
-          // jz
-          {.mask = 0b11111111, .value = 0b01110100},
-
-      };
-  struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
-      // mov immediate to memory/reg with optional displacement
-      {.mask = 0b1111111000111000, .value = 0b1100011000000000},
-
-      // add immmediate to register/memory
-      {.mask = 0b1111110000111000, .value = 0b1000000000000000},
-
-      // sub immmediate from register/memory
-      {.mask = 0b1111110000111000, .value = 0b1000000000101000},
-
-      // cmp immmediate and register/memory
-      {.mask = 0b1111110000111000, .value = 0b1000000000111000},
-  };
-
-  char *instruction_names_single_byte_prefix[] = {
-      "mov", "mov", "add",  "add",   "sub",    "sub",  "cmp",
-      "cmp", "jnz", "jl",   "jle",   "jb",     "jbe",  "jp",
-      "jo",  "js",  "jnl",  "jg",    "jnb",    "ja",   "jnp",
-      "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz",
-  };
-
-  char *instruction_names_two_byte_prefix[] = {
-      "mov",
-      "add",
-      "sub",
-      "cmp",
-  };
-
-  int (*single_byte_instruction_prefix_decoders[])(
-      unsigned char instruction_byte, FILE *executable,
-      const char *instruction_name) = {
-      decode_instruction_immediate_to_reg,         // mov bx, 6
-      decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
-      decode_instruction_immediate_to_accumulator, // add ax, 7
-      decode_instruction_reg_mem_reg,              // add ax, [bp +2]
-      decode_instruction_immediate_to_accumulator, // sub ax, 7
-      decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
-      decode_instruction_immediate_to_accumulator, // cmp ax, 7
-      decode_instruction_reg_mem_reg,              // cmp ax, [bp +2]
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-      decode_jump_instruction,
-  };
-
-  int (*two_byte_instruction_prefix_decoders[])(
-      uint16_t instruction_bytes, FILE * executable,
-      const char *instruction_name) = {
-      decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
-      decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
-      decode_instruction_immediate_to_memory_reg, // sub [bp + 2], 7
-      decode_instruction_immediate_to_memory_reg, // cmp [bp + 2], 7
-  };
+  const char *filename;
+  int exec = 0;
+  if (argc == 2) {
+    filename = argv[1];
+  } else {
+    filename = argv[2];
+    exec = 1;
+  }
+  fprintf(stderr, "disassembling file %s\n", filename);
+  FILE *executable = fopen(filename, "rb");
+  uint8_t instruction_byte;
 
   uint64_t single_byte_decoders_count =
       sizeof(single_byte_instruction_prefix_decoders) /
@@ -524,6 +339,7 @@ int main(int argc, char *argv[]) {
       sizeof(two_byte_instruction_prefix_decoders[0]);
 
   int exit_code = EXIT_SUCCESS;
+  struct context ctx = {.memory = {0}, .registers = {0}};
   printf("bits 16\n\n");
   while (fread(&instruction_byte, sizeof(instruction_byte), 1, executable) ==
          1) {
@@ -531,15 +347,13 @@ int main(int argc, char *argv[]) {
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
     for (uint64_t i = 0; i < single_byte_decoders_count; i++) {
-      unsigned char opcode_mask =
-          instruction_opcode_single_byte_prefixes[i].mask;
-      unsigned char opcode_prefix =
-          instruction_opcode_single_byte_prefixes[i].value;
+      uint8_t opcode_mask = instruction_opcode_single_byte_prefixes[i].mask;
+      uint8_t opcode_prefix = instruction_opcode_single_byte_prefixes[i].value;
       debug_byte_as_binary("trying following prefix:", opcode_prefix);
       if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
         exit_code = single_byte_instruction_prefix_decoders[i](
-            instruction_byte, executable,
+            &ctx, instruction_byte, executable,
             instruction_names_single_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
@@ -572,8 +386,12 @@ int main(int argc, char *argv[]) {
       debug_uint16_as_binary("trying following prefix: ", opcode_prefix);
       if ((instruction_word & opcode_mask) == opcode_prefix) {
         found = 1;
+        // TODO, do we even need this table when it contains only one decoder??
+        // It will most likely change as each jump may have different handler
+        // for simulation.
         exit_code = two_byte_instruction_prefix_decoders[i](
-            instruction_word, executable, instruction_names_two_byte_prefix[i]);
+            &ctx, instruction_word, executable,
+            instruction_names_two_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }
@@ -588,6 +406,16 @@ int main(int argc, char *argv[]) {
     }
 
     fprintf(stderr, "---- next instruction ----\n");
+  }
+
+  if (exec == 1) {
+    // TODO actually don't execute the instructions instead of just limiting the
+    // output.
+    printf("Final registers:\n");
+    for (int i = 0; i < REGISTER_COUNT; ++i) {
+      printf("\t%s: %x (%d)\n", register_word_map[1][i], ctx.registers[i],
+             ctx.registers[i]);
+    }
   }
 
 exit:
