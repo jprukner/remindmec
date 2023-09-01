@@ -15,8 +15,14 @@ struct two_byte_prefix_instruction {
 };
 
 struct context {
-  uint16_t registers[8];
   uint8_t memory[1024 * 1024];
+  uint16_t registers[8];
+  uint16_t flags;
+};
+
+enum flag {
+  ZERO = 1 << 6,
+  SIGN = 1 << 7,
 };
 
 enum instruction {

@@ -68,7 +68,8 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
 
   if (word == 1) {
     // Let's simulate only whole registers for now.
-    operations[instruction_id](&(ctx->registers[register_index]), &number);
+    ctx->flags =
+        operations[instruction_id](&(ctx->registers[register_index]), &number);
   }
 
   return EXIT_SUCCESS;
@@ -188,8 +189,9 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
 
     if (word == 1) {
       // let's simulate only whole registers for now.
-      operations[instruction_id](&(ctx->registers[destination_register_index]),
-                                 &(ctx->registers[source_register_index]));
+      ctx->flags = operations[instruction_id](
+          &(ctx->registers[destination_register_index]),
+          &(ctx->registers[source_register_index]));
     }
 
     break;
@@ -319,7 +321,8 @@ int decode_instruction_immediate_to_memory_reg(
   // simulate
   if (mode == INSTRUCTION_MODE_REGISTER && word == 1) {
     // Let's simulate only whole registers for now.
-    operations[instruction_id](&(ctx->registers[reg_mem]), &number);
+    ctx->flags =
+        operations[instruction_id](&(ctx->registers[reg_mem]), &number);
   }
 
   printf("%s %s %s, %u\n", instruction_id_to_name[instruction_id],
@@ -334,19 +337,35 @@ uint16_t mov(uint16_t *destination, uint16_t *source) {
 uint16_t add(uint16_t *destination, uint16_t *source) {
   uint16_t result = *destination + *source;
   *destination = result;
-  // todo set flags;
-  return 0;
+  uint16_t flags = 0;
+  if (result == 0) {
+    flags = flags | ZERO;
+  } else if ((0x8000 & result) != 0) {
+    flags = flags | SIGN;
+  }
+
+  return flags;
 }
 uint16_t sub(uint16_t *destination, uint16_t *source) {
   uint16_t result = *destination - *source;
   *destination = result;
-  // todo set flags;
-  return 0;
+  uint16_t flags = 0;
+  if (result == 0) {
+    flags = flags | ZERO;
+  } else if ((0x8000 & result) != 0) {
+    flags = flags | SIGN;
+  }
+  return flags;
 }
 uint16_t cmp(uint16_t *destination, uint16_t *source) {
   uint16_t result = *destination - *source;
-  // todo set flags;
-  return 0;
+  uint16_t flags = 0;
+  if (result == 0) {
+    flags = flags | ZERO;
+  } else if ((0x8000 & result) != 0) {
+    flags = flags | SIGN;
+  }
+  return flags;
 }
 
 int main(int argc, char *argv[]) {
@@ -456,6 +475,14 @@ int main(int argc, char *argv[]) {
       printf("\t%s: %04x (%d)\n", register_word_map[1][i], ctx.registers[i],
              ctx.registers[i]);
     }
+    printf("\tflags: ");
+    if ((ctx.flags & ZERO) != 0) {
+      printf("Z");
+    }
+    if ((ctx.flags & SIGN) != 0) {
+      printf("S");
+    }
+    printf("\n");
   }
 
 exit:
