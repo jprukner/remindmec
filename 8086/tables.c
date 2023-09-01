@@ -138,7 +138,7 @@ char *instruction_id_to_name[] = {
     "jnp", "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz"};
 
 int (*single_byte_instruction_prefix_decoders[])(
-    struct context *ctx, uint8_t instruction_byte, FILE *executable,
+    struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
     enum instruction instruction_id) = {
     decode_instruction_immediate_to_reg,         // mov bx, 6
     decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
@@ -171,7 +171,8 @@ int (*single_byte_instruction_prefix_decoders[])(
 };
 
 int (*two_byte_instruction_prefix_decoders[])(
-    struct context *ctx, uint16_t instruction_bytes, FILE *executable,
+    struct context *ctx, uint16_t instruction_bytes,
+    uint8_t instruction_buffer[],
     enum instruction instruction_id) = {
     decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
     decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7

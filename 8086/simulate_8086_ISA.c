@@ -11,8 +11,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #define INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT 0
 #define INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT 1
@@ -22,16 +22,13 @@
 
 // read one or two bytes based on n_bytes variable
 int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
-                           FILE *executable) {
+                           uint8_t instruction_buffer[]) {
   if (n_bytes != 2 && n_bytes != 1) {
     fprintf(stderr, "expected 1 or 2 bytes to read, got %lu\n", n_bytes);
     return -1;
   }
   uint8_t buffer[2] = {0};
-  if (fread(buffer, n_bytes, 1, executable) != 1) {
-    fprintf(stderr, "failed to read %lu bytes\n", n_bytes);
-    return -1;
-  }
+  memcpy(buffer, instruction_buffer, n_bytes);
 
   *number_output = buffer[0];
   *number_output = (*number_output) | ((uint16_t)(buffer[1]) << 8);
@@ -43,7 +40,7 @@ int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
 
 int decode_instruction_immediate_to_reg(struct context *ctx,
                                         uint8_t instruction_byte,
-                                        FILE *executable,
+                                        uint8_t instruction_buffer[],
                                         enum instruction instruction_id) {
   fprintf(stderr, "this is %s immediate to reg\n",
           instruction_id_to_name[instruction_id]);
@@ -54,10 +51,12 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
 
   uint16_t number = 0;
   size_t size = (word + 1);
-  int n = read_n_bytes_as_number(size, &number, executable);
+  ctx->ip += 1;
+  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
+  ctx->ip += size;
 
   // print
   printf("%s %s, %u\n", instruction_id_to_name[instruction_id],
@@ -76,7 +75,7 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
 }
 
 int decode_instruction_immediate_to_accumulator(
-    struct context *ctx, uint8_t instruction_byte, FILE *executable,
+    struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
     enum instruction instruction_id) {
   fprintf(stderr, "this is %s immediate to accumulator\n",
           instruction_id_to_name[instruction_id]);
@@ -85,10 +84,12 @@ int decode_instruction_immediate_to_accumulator(
 
   uint16_t number = 0;
   size_t size = (word + 1);
-  int n = read_n_bytes_as_number(size, &number, executable);
+  ctx->ip += 1;
+  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
+  ctx->ip += size;
 
   printf("%s %s, %u\n", instruction_id_to_name[instruction_id],
          accumulator_registers[word], number);
@@ -97,16 +98,14 @@ int decode_instruction_immediate_to_accumulator(
 }
 
 int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
-                            FILE *executable, enum instruction instruction_id) {
+                            uint8_t instruction_buffer[],
+                            enum instruction instruction_id) {
   fprintf(stderr, "this is %s\n", instruction_id_to_name[instruction_id]);
 
   int8_t number = 0;
-
-  if (fread(&number, sizeof(int8_t), 1, executable) != 1) {
-    fprintf(stderr, "failed to read next byte for %s instruction\n",
-            instruction_id_to_name[instruction_id]);
-    return EXIT_FAILURE;
-  }
+  ctx->ip += 1;
+  number = instruction_buffer[ctx->ip];
+  ctx->ip += 1;
 
   printf("%s %d\n", instruction_id_to_name[instruction_id], number);
 
@@ -116,7 +115,7 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
                               char formated_displacement_output[],
                               uint8_t formated_displacement_output_legth,
                               const char *displacement_template,
-                              FILE *executable) {
+                              uint8_t instruction_buffer[]) {
   if (n_bytes_displacement != 2 && n_bytes_displacement != 1) {
     fprintf(stderr, "expected 1 or 2 bytes displacement, got %u\n",
             n_bytes_displacement);
@@ -124,8 +123,8 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
   }
 
   uint16_t displacement = 0;
-  int n =
-      read_n_bytes_as_number(n_bytes_displacement, &displacement, executable);
+  int n = read_n_bytes_as_number(n_bytes_displacement, &displacement,
+                                 instruction_buffer);
   if (n < 0) {
     return -1;
   }
@@ -141,7 +140,8 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
 }
 
 int decode_instruction_reg_mem_reg(struct context *ctx,
-                                   uint8_t instruction_byte, FILE *executable,
+                                   uint8_t instruction_byte,
+                                   uint8_t instruction_buffer[],
                                    enum instruction instruction_id) {
   const uint8_t direction_mask = 0x02;
   const uint8_t word_mask = 0x01;
@@ -156,14 +156,10 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   fprintf(stderr, "direction is %u\n", direction);
   fprintf(stderr, "word is %u\n", word);
 
-  size_t n = fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
-  if (n != 1) {
-    fprintf(stderr,
-            "expected one byte for %s instruction to be complete, got none\n",
-            instruction_id_to_name[instruction_id]);
-    return EXIT_FAILURE;
-  }
+  ctx->ip += 1;
+  instruction_byte = instruction_buffer[ctx->ip];
   debug_byte_as_binary("next byte as binary: ", instruction_byte);
+  ctx->ip += 1;
 
   uint8_t mode = (instruction_byte & mode_mask) >> 6;
   uint8_t reg = (instruction_byte & register_mask) >> 3;
@@ -210,12 +206,14 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     source = memory_displacement_expresion_table[mode][reg_mem];
     int status = load_n_bytes_displacement(
         mode, displacement_formated_buffer,
-        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source, executable);
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
+        instruction_buffer);
     if (status < 0) {
       return EXIT_FAILURE;
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
     source = displacement_formated_buffer;
+    ctx->ip += mode;
     break;
   default:
     debug_byte_as_binary("unknown mode: ", mode);
@@ -233,8 +231,8 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
 }
 
 int decode_instruction_immediate_to_memory_reg(
-    struct context *ctx, uint16_t instruction_word, FILE *executable,
-    enum instruction instruction_id) {
+    struct context *ctx, uint16_t instruction_word,
+    uint8_t instruction_buffer[], enum instruction instruction_id) {
   const uint16_t word_mask = 0x0100;
   const uint16_t sign_extension_mask = 0x0200;
   const uint16_t mode_mask = 0x00c0;
@@ -259,6 +257,7 @@ int decode_instruction_immediate_to_memory_reg(
   char displacement_formated_buffer
       [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
 
+  ctx->ip += 2;
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
     fprintf(stderr, "%s mode: Register Mode\n",
@@ -278,10 +277,11 @@ int decode_instruction_immediate_to_memory_reg(
       int n = load_n_bytes_displacement(
           2, displacement_formated_buffer,
           UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
-          executable);
+          instruction_buffer);
       if (n < 0) {
         return EXIT_FAILURE;
       }
+      ctx->ip += 2;
       destination = displacement_formated_buffer;
     }
     break;
@@ -295,13 +295,14 @@ int decode_instruction_immediate_to_memory_reg(
     int n = load_n_bytes_displacement(
         mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
-        executable);
+        instruction_buffer);
     if (n < 0) {
       return EXIT_FAILURE;
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
     destination = displacement_formated_buffer;
     size_modifier = size_modifiers[word];
+    ctx->ip += mode;
     break;
   default:
     debug_byte_as_binary("unknown mode: ", mode);
@@ -313,10 +314,11 @@ int decode_instruction_immediate_to_memory_reg(
   } else {
     size = 1;
   }
-  int n = read_n_bytes_as_number(size, &number, executable);
+  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
+  ctx->ip += size;
 
   // simulate
   if (mode == INSTRUCTION_MODE_REGISTER && word == 1) {
@@ -387,6 +389,20 @@ int main(int argc, char *argv[]) {
   }
   fprintf(stderr, "disassembling file %s\n", filename);
   FILE *executable = fopen(filename, "rb");
+  fseek(executable, 0, SEEK_END);
+  long fsize = ftell(executable);
+  fseek(executable, 0, SEEK_SET);
+
+  uint8_t *instructions_buffer = malloc(fsize);
+  size_t n = fread(instructions_buffer, fsize, 1, executable);
+  fclose(executable);
+  if (n != 1) {
+    fprintf(stderr,
+            "failed to read given exectuable into memory, n=%lu bytes read\n",
+            n);
+    return EXIT_FAILURE;
+  }
+
   uint8_t instruction_byte;
 
   uint64_t single_byte_decoders_count =
@@ -398,11 +414,11 @@ int main(int argc, char *argv[]) {
       sizeof(two_byte_instruction_prefix_decoders[0]);
 
   int exit_code = EXIT_SUCCESS;
-  struct context ctx = {.memory = {0}, .registers = {0}};
-  printf("bits 16\n\n");
-  while (fread(&instruction_byte, sizeof(instruction_byte), 1, executable) ==
-         1) {
+  struct context ctx = {.memory = {0}, .registers = {0}, .ip = 0};
 
+  printf("bits 16\n\n");
+  while (ctx.ip < fsize) {
+    instruction_byte = instructions_buffer[ctx.ip];
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
     for (uint64_t i = 0; i < single_byte_decoders_count; i++) {
@@ -412,7 +428,7 @@ int main(int argc, char *argv[]) {
       if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
         exit_code = single_byte_instruction_prefix_decoders[i](
-            &ctx, instruction_byte, executable,
+            &ctx, instruction_byte, instructions_buffer,
             instruction_names_single_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
@@ -427,15 +443,7 @@ int main(int argc, char *argv[]) {
     instruction_word = instruction_word | ((uint16_t)(instruction_byte) << 8);
     // Load next byte so we can decide on two byte prefix when one byte prefix
     // failed.
-    size_t n =
-        fread(&instruction_byte, sizeof(instruction_byte), 1, executable);
-    if (n != 1) {
-      fprintf(stderr,
-              "failed to load next byte befor testing for two byte "
-              "instructions prefixes, n is %lu",
-              n);
-      return EXIT_FAILURE;
-    }
+    instruction_byte = instructions_buffer[ctx.ip + 1];
     instruction_word = instruction_word | ((uint16_t)instruction_byte);
     debug_uint16_as_binary("first two instruction bytes as binary: ",
                            instruction_word);
@@ -449,7 +457,7 @@ int main(int argc, char *argv[]) {
         // It will most likely change as each jump may have different handler
         // for simulation.
         exit_code = two_byte_instruction_prefix_decoders[i](
-            &ctx, instruction_word, executable,
+            &ctx, instruction_word, instructions_buffer,
             instruction_names_two_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
@@ -486,6 +494,6 @@ int main(int argc, char *argv[]) {
   }
 
 exit:
-  fclose(executable);
+  free(instructions_buffer);
   return exit_code;
 }

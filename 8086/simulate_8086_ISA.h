@@ -18,6 +18,7 @@ struct context {
   uint8_t memory[1024 * 1024];
   uint16_t registers[8];
   uint16_t flags;
+  uint16_t ip; // instruction pointer
 };
 
 enum flag {
@@ -59,22 +60,24 @@ uint16_t cmp(uint16_t *destination, uint16_t *source);
 
 int decode_instruction_immediate_to_reg(struct context *ctx,
                                         uint8_t instruction_byte,
-                                        FILE *executable,
+                                        uint8_t instruction_buffer[],
                                         enum instruction instruction_id);
 
 int decode_instruction_immediate_to_accumulator(
-    struct context *ctx, uint8_t instruction_byte, FILE *executable,
+    struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
     enum instruction instruction_id);
 
 int decode_instruction_reg_mem_reg(struct context *ctx,
-                                   uint8_t instruction_byte, FILE *executable,
+                                   uint8_t instruction_byte,
+                                   uint8_t instruction_buffer[],
                                    enum instruction instruction_id);
 
 int decode_instruction_immediate_to_memory_reg(struct context *ctx,
                                                uint16_t instruction_word,
-                                               FILE *executable,
+                                               uint8_t instruction_buffer[],
                                                enum instruction instruction_id);
 
 int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
-                            FILE *executable, enum instruction instruction_id);
+                            uint8_t instruction_buffer[],
+                            enum instruction instruction_id);
 #endif
