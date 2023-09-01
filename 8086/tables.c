@@ -1,4 +1,5 @@
 #include "simulate_8086_ISA.h"
+#include <stdint.h>
 #include <stdio.h>
 
 #define REGISTER_COUNT 8
@@ -119,22 +120,26 @@ struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
     {.mask = 0b1111110000111000, .value = 0b1000000000111000},
 };
 
-char *instruction_names_single_byte_prefix[] = {
-    "mov", "mov", "add", "add",  "sub",   "sub",    "cmp",  "cmp", "jnz", "jl",
-    "jle", "jb",  "jbe", "jp",   "jo",    "js",     "jnl",  "jg",  "jnb", "ja",
-    "jnp", "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz",
+enum instruction instruction_names_single_byte_prefix[] = {
+    MOV, MOV, ADD, ADD, SUB, SUB, CMP, CMP, JNZ, JL,   JLE,   JB,     JBE,  JP,
+    JO,  JS,  JNL, JG,  JNB, JA,  JNP, JNO, JNS, LOOP, LOOPZ, LOOPNZ, JCXZ, JZ,
 };
 
-char *instruction_names_two_byte_prefix[] = {
-    "mov",
-    "add",
-    "sub",
-    "cmp",
+enum instruction instruction_names_two_byte_prefix[] = {
+    MOV,
+    ADD,
+    SUB,
+    CMP,
 };
+
+char *instruction_id_to_name[] = {
+    "mov", "add", "sub", "cmp",  "jnz",   "jl",     "jle",  "jb",
+    "jbe", "jp",  "jo",  "js",   "jnl",   "jg",     "jnb",  "ja",
+    "jnp", "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz"};
 
 int (*single_byte_instruction_prefix_decoders[])(
     struct context *ctx, uint8_t instruction_byte, FILE *executable,
-    const char *instruction_name) = {
+    enum instruction instruction_id) = {
     decode_instruction_immediate_to_reg,         // mov bx, 6
     decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
     decode_instruction_immediate_to_accumulator, // add ax, 7
@@ -165,12 +170,14 @@ int (*single_byte_instruction_prefix_decoders[])(
     decode_instruction_jump,
 };
 
-int (*two_byte_instruction_prefix_decoders[])(struct context *ctx,
-                                              uint16_t instruction_bytes,
-                                              FILE *executable,
-                                              const char *instruction_name) = {
+int (*two_byte_instruction_prefix_decoders[])(
+    struct context *ctx, uint16_t instruction_bytes, FILE *executable,
+    enum instruction instruction_id) = {
     decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
     decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
     decode_instruction_immediate_to_memory_reg, // sub [bp + 2], 7
     decode_instruction_immediate_to_memory_reg, // cmp [bp + 2], 7
 };
+
+uint16_t (*operations[])(uint16_t *destination, uint16_t *source) = {mov, add,
+                                                                     sub, cmp};
