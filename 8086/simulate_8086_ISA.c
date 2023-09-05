@@ -108,6 +108,19 @@ int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
   number = instruction_buffer[ctx->ip];
   ctx->ip += 1;
 
+  fprintf(stderr, "ip before simulation: %u\n", ctx->ip);
+
+  // note: we need to substract 4 because there are other 4 non-jump
+  // instructions in the enum
+  // TODO: maybe we could move jump instructions in separate enum so we don't
+  // have to do the substraction.
+  if ((ctx->flags & jump_masks[instruction_id - 4]) ==
+      jump_values[instruction_id - 4]) {
+    ctx->ip = (int16_t)(ctx->ip) + number;
+  }
+
+  fprintf(stderr, "ip after simulation: %u\n", ctx->ip);
+
   printf("%s %d\n", instruction_id_to_name[instruction_id], number);
 
   return EXIT_SUCCESS;

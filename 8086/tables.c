@@ -182,3 +182,13 @@ int (*two_byte_instruction_prefix_decoders[])(
 
 uint16_t (*operations[])(uint16_t *destination, uint16_t *source) = {mov, add,
                                                                      sub, cmp};
+
+uint16_t jump_masks[] = {
+    // JNZ
+    ZERO,
+};
+
+uint16_t jump_values[] = {
+    // JNZ
+    0,
+};
