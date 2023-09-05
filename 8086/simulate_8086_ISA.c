@@ -477,13 +477,12 @@ int main(int argc, char *argv[]) {
   }
 
   if (exec == 1) {
-    // TODO actually don't execute the instructions instead of just limiting the
-    // output.
     printf("Final registers:\n");
     for (int i = 0; i < REGISTER_COUNT; ++i) {
       printf("\t%s: %04x (%d)\n", register_word_map[1][i], ctx.registers[i],
              ctx.registers[i]);
     }
+    printf("\tip: %04x (%d)\n", ctx.ip, ctx.ip);
     printf("\tflags: ");
     if ((ctx.flags & ZERO) != 0) {
       printf("Z");
