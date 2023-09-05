@@ -21,14 +21,15 @@
 #define UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH 18
 
 // read one or two bytes based on n_bytes variable
-int read_n_bytes_as_number(size_t n_bytes, uint16_t *number_output,
+int read_n_bytes_as_number(struct context *ctx, size_t n_bytes,
+                           uint16_t *number_output,
                            uint8_t instruction_buffer[]) {
   if (n_bytes != 2 && n_bytes != 1) {
     fprintf(stderr, "expected 1 or 2 bytes to read, got %lu\n", n_bytes);
     return -1;
   }
   uint8_t buffer[2] = {0};
-  memcpy(buffer, instruction_buffer, n_bytes);
+  memcpy(buffer, &(instruction_buffer[ctx->ip]), n_bytes);
 
   *number_output = buffer[0];
   *number_output = (*number_output) | ((uint16_t)(buffer[1]) << 8);
@@ -52,7 +53,7 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
   uint16_t number = 0;
   size_t size = (word + 1);
   ctx->ip += 1;
-  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
+  int n = read_n_bytes_as_number(ctx, size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
@@ -85,7 +86,7 @@ int decode_instruction_immediate_to_accumulator(
   uint16_t number = 0;
   size_t size = (word + 1);
   ctx->ip += 1;
-  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
+  int n = read_n_bytes_as_number(ctx, size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
@@ -111,7 +112,7 @@ int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
 
   return EXIT_SUCCESS;
 }
-int load_n_bytes_displacement(uint8_t n_bytes_displacement,
+int load_n_bytes_displacement(struct context *ctx, uint8_t n_bytes_displacement,
                               char formated_displacement_output[],
                               uint8_t formated_displacement_output_legth,
                               const char *displacement_template,
@@ -123,7 +124,7 @@ int load_n_bytes_displacement(uint8_t n_bytes_displacement,
   }
 
   uint16_t displacement = 0;
-  int n = read_n_bytes_as_number(n_bytes_displacement, &displacement,
+  int n = read_n_bytes_as_number(ctx, n_bytes_displacement, &displacement,
                                  instruction_buffer);
   if (n < 0) {
     return -1;
@@ -205,7 +206,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
             instruction_id_to_name[instruction_id], mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
     int status = load_n_bytes_displacement(
-        mode, displacement_formated_buffer,
+        ctx, mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
         instruction_buffer);
     if (status < 0) {
@@ -275,7 +276,7 @@ int decode_instruction_immediate_to_memory_reg(
               "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
               instruction_id_to_name[instruction_id]);
       int n = load_n_bytes_displacement(
-          2, displacement_formated_buffer,
+          ctx, 2, displacement_formated_buffer,
           UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
           instruction_buffer);
       if (n < 0) {
@@ -293,7 +294,7 @@ int decode_instruction_immediate_to_memory_reg(
             instruction_id_to_name[instruction_id], mode);
     destination = memory_displacement_expresion_table[mode][reg_mem];
     int n = load_n_bytes_displacement(
-        mode, displacement_formated_buffer,
+        ctx, mode, displacement_formated_buffer,
         UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
         instruction_buffer);
     if (n < 0) {
@@ -314,7 +315,7 @@ int decode_instruction_immediate_to_memory_reg(
   } else {
     size = 1;
   }
-  int n = read_n_bytes_as_number(size, &number, instruction_buffer);
+  int n = read_n_bytes_as_number(ctx, size, &number, instruction_buffer);
   if (n < 0) {
     return EXIT_FAILURE;
   }
