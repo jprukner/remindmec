@@ -26,7 +26,7 @@ enum flag {
   SIGN = 1 << 7,
 };
 
-enum instruction {
+enum instruction_id {
   MOV,
   ADD,
   SUB,
@@ -53,6 +53,18 @@ enum instruction {
   JZ,
 };
 
+struct instruction {
+  enum instruction_id id;
+  const char *name;
+  int (*decoder)(struct context *ctx, uint8_t instruction_byte,
+                 uint8_t instruction_buffer[], struct instruction instruction);
+};
+
+struct two_byte_instruction {
+  enum instruction_id id;
+  const char *name;
+};
+
 uint16_t mov(uint16_t *destination, uint16_t *source);
 uint16_t add(uint16_t *destination, uint16_t *source);
 uint16_t sub(uint16_t *destination, uint16_t *source);
@@ -61,23 +73,23 @@ uint16_t cmp(uint16_t *destination, uint16_t *source);
 int decode_instruction_immediate_to_reg(struct context *ctx,
                                         uint8_t instruction_byte,
                                         uint8_t instruction_buffer[],
-                                        enum instruction instruction_id);
+                                        struct instruction instruction);
 
-int decode_instruction_immediate_to_accumulator(
-    struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
-    enum instruction instruction_id);
+int decode_instruction_immediate_to_accumulator(struct context *ctx,
+                                                uint8_t instruction_byte,
+                                                uint8_t instruction_buffer[],
+                                                struct instruction instruction);
 
 int decode_instruction_reg_mem_reg(struct context *ctx,
                                    uint8_t instruction_byte,
                                    uint8_t instruction_buffer[],
-                                   enum instruction instruction_id);
+                                   struct instruction instruction);
 
-int decode_instruction_immediate_to_memory_reg(struct context *ctx,
-                                               uint16_t instruction_word,
-                                               uint8_t instruction_buffer[],
-                                               enum instruction instruction_id);
+int decode_instruction_immediate_to_memory_reg(
+    struct context *ctx, uint16_t instruction_word,
+    uint8_t instruction_buffer[], struct two_byte_instruction instruction);
 
 int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
                             uint8_t instruction_buffer[],
-                            enum instruction instruction_id);
+                            struct instruction instruction);
 #endif

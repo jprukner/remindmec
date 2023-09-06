@@ -42,9 +42,8 @@ int read_n_bytes_as_number(struct context *ctx, size_t n_bytes,
 int decode_instruction_immediate_to_reg(struct context *ctx,
                                         uint8_t instruction_byte,
                                         uint8_t instruction_buffer[],
-                                        enum instruction instruction_id) {
-  fprintf(stderr, "this is %s immediate to reg\n",
-          instruction_id_to_name[instruction_id]);
+                                        struct instruction instruction) {
+  fprintf(stderr, "this is %s immediate to reg\n", instruction.name);
   const uint8_t word_mask = 0x08;
   const uint8_t register_mask = 0x07;
   uint8_t word = (instruction_byte & word_mask) >> 3;
@@ -60,8 +59,7 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
   ctx->ip += size;
 
   // print
-  printf("%s %s, %u\n", instruction_id_to_name[instruction_id],
-         register_word_map[word][reg], number);
+  printf("%s %s, %u\n", instruction.name, register_word_map[word][reg], number);
 
   // simulate
   uint8_t register_index = reg;
@@ -69,7 +67,7 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
   if (word == 1) {
     // Let's simulate only whole registers for now.
     ctx->flags =
-        operations[instruction_id](&(ctx->registers[register_index]), &number);
+        operations[instruction.id](&(ctx->registers[register_index]), &number);
   }
 
   return EXIT_SUCCESS;
@@ -77,9 +75,8 @@ int decode_instruction_immediate_to_reg(struct context *ctx,
 
 int decode_instruction_immediate_to_accumulator(
     struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
-    enum instruction instruction_id) {
-  fprintf(stderr, "this is %s immediate to accumulator\n",
-          instruction_id_to_name[instruction_id]);
+    struct instruction instruction) {
+  fprintf(stderr, "this is %s immediate to accumulator\n", instruction.name);
   const uint8_t word_mask = 0x01;
   uint8_t word = instruction_byte & word_mask;
 
@@ -92,16 +89,15 @@ int decode_instruction_immediate_to_accumulator(
   }
   ctx->ip += size;
 
-  printf("%s %s, %u\n", instruction_id_to_name[instruction_id],
-         accumulator_registers[word], number);
+  printf("%s %s, %u\n", instruction.name, accumulator_registers[word], number);
 
   return EXIT_SUCCESS;
 }
 
 int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
                             uint8_t instruction_buffer[],
-                            enum instruction instruction_id) {
-  fprintf(stderr, "this is %s\n", instruction_id_to_name[instruction_id]);
+                            struct instruction instruction) {
+  fprintf(stderr, "this is %s\n", instruction.name);
 
   int8_t number = 0;
   ctx->ip += 1;
@@ -114,14 +110,14 @@ int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
   // instructions in the enum
   // TODO: maybe we could move jump instructions in separate enum so we don't
   // have to do the substraction.
-  if ((ctx->flags & jump_masks[instruction_id - 4]) ==
-      jump_values[instruction_id - 4]) {
+  if ((ctx->flags & jump_masks[instruction.id - 4]) ==
+      jump_values[instruction.id - 4]) {
     ctx->ip = (int16_t)(ctx->ip) + number;
   }
 
   fprintf(stderr, "ip after simulation: %u\n", ctx->ip);
 
-  printf("%s %d\n", instruction_id_to_name[instruction_id], number);
+  printf("%s %d\n", instruction.name, number);
 
   return EXIT_SUCCESS;
 }
@@ -156,7 +152,7 @@ int load_n_bytes_displacement(struct context *ctx, uint8_t n_bytes_displacement,
 int decode_instruction_reg_mem_reg(struct context *ctx,
                                    uint8_t instruction_byte,
                                    uint8_t instruction_buffer[],
-                                   enum instruction instruction_id) {
+                                   struct instruction instruction) {
   const uint8_t direction_mask = 0x02;
   const uint8_t word_mask = 0x01;
   const uint8_t mode_mask = 0xc0;
@@ -164,7 +160,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   const uint8_t register_memory_mask = 0x07;
 
   fprintf(stderr, "it's %s type 'Register/memory to/from register' \n",
-          instruction_id_to_name[instruction_id]);
+          instruction.name);
   uint8_t direction = (instruction_byte & direction_mask) >> 1;
   uint8_t word = instruction_byte & word_mask;
   fprintf(stderr, "direction is %u\n", direction);
@@ -189,8 +185,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
 
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
-    fprintf(stderr, "%s mode: Register Mode\n",
-            instruction_id_to_name[instruction_id]);
+    fprintf(stderr, "%s mode: Register Mode\n", instruction.name);
     source = register_word_map[word][reg_mem];
     // simulate
     // TODO THIS SIMULATION DOES NOT TAKE THE DIRECTION BIT INTO ACCOUNT.
@@ -199,7 +194,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
 
     if (word == 1) {
       // let's simulate only whole registers for now.
-      ctx->flags = operations[instruction_id](
+      ctx->flags = operations[instruction.id](
           &(ctx->registers[destination_register_index]),
           &(ctx->registers[source_register_index]));
     }
@@ -207,7 +202,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
-            instruction_id_to_name[instruction_id]);
+            instruction.name);
     source = memory_displacement_expresion_table[mode][reg_mem];
     // TODO handle specail case for MODE=0b110 - direct address.
     break;
@@ -216,7 +211,7 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     // mode value itself.
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
-            instruction_id_to_name[instruction_id], mode);
+            instruction.name, mode);
     source = memory_displacement_expresion_table[mode][reg_mem];
     int status = load_n_bytes_displacement(
         ctx, mode, displacement_formated_buffer,
@@ -239,21 +234,20 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     destination = source;
     source = tmp;
   }
-  printf("%s %s, %s\n", instruction_id_to_name[instruction_id], destination,
-         source);
+  printf("%s %s, %s\n", instruction.name, destination, source);
   return EXIT_SUCCESS;
 }
 
 int decode_instruction_immediate_to_memory_reg(
     struct context *ctx, uint16_t instruction_word,
-    uint8_t instruction_buffer[], enum instruction instruction_id) {
+    uint8_t instruction_buffer[], struct two_byte_instruction instruction) {
   const uint16_t word_mask = 0x0100;
   const uint16_t sign_extension_mask = 0x0200;
   const uint16_t mode_mask = 0x00c0;
   const uint16_t register_memory_mask = 0x0007;
 
   fprintf(stderr, "it's %s type 'Immediate to register/memory' \n",
-          instruction_id_to_name[instruction_id]);
+          instruction.name);
 
   uint8_t word = (instruction_word & word_mask) >> 8;
   uint8_t sign_extension = (instruction_word & sign_extension_mask) >> 9;
@@ -274,20 +268,19 @@ int decode_instruction_immediate_to_memory_reg(
   ctx->ip += 2;
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
-    fprintf(stderr, "%s mode: Register Mode\n",
-            instruction_id_to_name[instruction_id]);
+    fprintf(stderr, "%s mode: Register Mode\n", instruction.name);
     destination = register_word_map[word][reg_mem];
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
-            instruction_id_to_name[instruction_id]);
+            instruction.name);
     destination = memory_displacement_expresion_table[mode][reg_mem];
     size_modifier = size_modifiers[word];
     if (reg_mem == 6) {
       // handle specail case for MODE=0b110 - direct address.
       fprintf(stderr,
               "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
-              instruction_id_to_name[instruction_id]);
+              instruction.name);
       int n = load_n_bytes_displacement(
           ctx, 2, displacement_formated_buffer,
           UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
@@ -304,7 +297,7 @@ int decode_instruction_immediate_to_memory_reg(
     // mode value itself.
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
-            instruction_id_to_name[instruction_id], mode);
+            instruction.name, mode);
     destination = memory_displacement_expresion_table[mode][reg_mem];
     int n = load_n_bytes_displacement(
         ctx, mode, displacement_formated_buffer,
@@ -338,11 +331,11 @@ int decode_instruction_immediate_to_memory_reg(
   if (mode == INSTRUCTION_MODE_REGISTER && word == 1) {
     // Let's simulate only whole registers for now.
     ctx->flags =
-        operations[instruction_id](&(ctx->registers[reg_mem]), &number);
+        operations[instruction.id](&(ctx->registers[reg_mem]), &number);
   }
 
-  printf("%s %s %s, %u\n", instruction_id_to_name[instruction_id],
-         size_modifier, destination, number);
+  printf("%s %s %s, %u\n", instruction.name, size_modifier, destination,
+         number);
   return EXIT_SUCCESS;
 }
 
@@ -419,13 +412,13 @@ int main(int argc, char *argv[]) {
 
   uint8_t instruction_byte;
 
-  uint64_t single_byte_decoders_count =
-      sizeof(single_byte_instruction_prefix_decoders) /
-      sizeof(single_byte_instruction_prefix_decoders[0]);
+  uint64_t single_byte_prefix_instructions_count =
+      sizeof(instructions_single_byte_prefix) /
+      sizeof(instructions_single_byte_prefix[0]);
 
-  uint64_t two_byte_decoders_count =
-      sizeof(two_byte_instruction_prefix_decoders) /
-      sizeof(two_byte_instruction_prefix_decoders[0]);
+  uint64_t two_byte_instructions_count =
+      sizeof(instructions_two_byte_prefix) /
+      sizeof(instructions_two_byte_prefix[0]);
 
   int exit_code = EXIT_SUCCESS;
   struct context ctx = {.memory = {0}, .registers = {0}, .ip = 0};
@@ -435,15 +428,16 @@ int main(int argc, char *argv[]) {
     instruction_byte = instructions_buffer[ctx.ip];
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
-    for (uint64_t i = 0; i < single_byte_decoders_count; i++) {
+    for (uint64_t i = 0; i < single_byte_prefix_instructions_count; i++) {
+      struct instruction instruction = instructions_single_byte_prefix[i];
       uint8_t opcode_mask = instruction_opcode_single_byte_prefixes[i].mask;
       uint8_t opcode_prefix = instruction_opcode_single_byte_prefixes[i].value;
       debug_byte_as_binary("trying following prefix:", opcode_prefix);
       if ((instruction_byte & opcode_mask) == opcode_prefix) {
         found = 1;
-        exit_code = single_byte_instruction_prefix_decoders[i](
+        exit_code = instructions_single_byte_prefix[i].decoder(
             &ctx, instruction_byte, instructions_buffer,
-            instruction_names_single_byte_prefix[i]);
+            instructions_single_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }
@@ -461,18 +455,17 @@ int main(int argc, char *argv[]) {
     instruction_word = instruction_word | ((uint16_t)instruction_byte);
     debug_uint16_as_binary("first two instruction bytes as binary: ",
                            instruction_word);
-    for (uint64_t i = 0; i < two_byte_decoders_count; i++) {
+    for (uint64_t i = 0; i < two_byte_instructions_count; i++) {
       uint16_t opcode_mask = instruction_opcode_two_byte_prefixes[i].mask;
       uint16_t opcode_prefix = instruction_opcode_two_byte_prefixes[i].value;
       debug_uint16_as_binary("trying following prefix: ", opcode_prefix);
       if ((instruction_word & opcode_mask) == opcode_prefix) {
         found = 1;
-        // TODO, do we even need this table when it contains only one decoder??
-        // It will most likely change as each jump may have different handler
-        // for simulation.
-        exit_code = two_byte_instruction_prefix_decoders[i](
+        // Note: there is only single instruction type where we need to check
+        // first two bytes. Thus there is only one decoder.
+        exit_code = decode_instruction_immediate_to_memory_reg(
             &ctx, instruction_word, instructions_buffer,
-            instruction_names_two_byte_prefix[i]);
+            instructions_two_byte_prefix[i]);
         if (exit_code != EXIT_SUCCESS) {
           goto exit;
         }

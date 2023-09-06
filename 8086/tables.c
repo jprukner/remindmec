@@ -120,64 +120,83 @@ struct two_byte_prefix_instruction instruction_opcode_two_byte_prefixes[] = {
     {.mask = 0b1111110000111000, .value = 0b1000000000111000},
 };
 
-enum instruction instruction_names_single_byte_prefix[] = {
-    MOV, MOV, ADD, ADD, SUB, SUB, CMP, CMP, JNZ, JL,   JLE,   JB,     JBE,  JP,
-    JO,  JS,  JNL, JG,  JNB, JA,  JNP, JNO, JNS, LOOP, LOOPZ, LOOPNZ, JCXZ, JZ,
+struct instruction instructions_single_byte_prefix[] = {
+    // mov bx, 6
+    {.id = MOV, .name = "mov", .decoder = decode_instruction_immediate_to_reg},
+
+    // mov ax, [bp + 2]
+    {.id = MOV, .name = "mov", .decoder = decode_instruction_reg_mem_reg},
+
+    // add ax, 7
+    {
+        .id = ADD,
+        .name = "add",
+        .decoder = decode_instruction_immediate_to_accumulator,
+    },
+
+    // add ax, [bp +2]
+    {.id = ADD, .name = "add", .decoder = decode_instruction_reg_mem_reg},
+
+    // sub ax, 7
+    {
+        .id = SUB,
+        .name = "sub",
+        .decoder = decode_instruction_immediate_to_accumulator,
+    },
+
+    // sub ax, [bp +2]
+    {.id = SUB, .name = "sub", .decoder = decode_instruction_reg_mem_reg},
+
+    // cmp ax, 7
+    {
+        .id = CMP,
+        .name = "cmp",
+        .decoder = decode_instruction_immediate_to_accumulator,
+    },
+
+    // cmp ax, [bp +2]
+    {.id = CMP, .name = "cmp", .decoder = decode_instruction_reg_mem_reg},
+
+    {.id = JNZ, .name = "jnz", .decoder = decode_instruction_jump},
+    {.id = JL, .name = "jl", .decoder = decode_instruction_jump},
+    {.id = JLE, .name = "jle", .decoder = decode_instruction_jump},
+    {.id = JB, .name = "jb", .decoder = decode_instruction_jump},
+    {.id = JBE, .name = "jbe", .decoder = decode_instruction_jump},
+    {.id = JP, .name = "jp", .decoder = decode_instruction_jump},
+    {.id = JO, .name = "jo", .decoder = decode_instruction_jump},
+    {.id = JS, .name = "js", .decoder = decode_instruction_jump},
+    {.id = JNL, .name = "jnl", .decoder = decode_instruction_jump},
+    {.id = JG, .name = "jg", .decoder = decode_instruction_jump},
+    {.id = JNB, .name = "jnb", .decoder = decode_instruction_jump},
+    {.id = JA, .name = "ja", .decoder = decode_instruction_jump},
+    {.id = JNP, .name = "jnp", .decoder = decode_instruction_jump},
+    {.id = JNO, .name = "jno", .decoder = decode_instruction_jump},
+    {.id = JNS, .name = "jns", .decoder = decode_instruction_jump},
+    {.id = LOOP, .name = "loop", .decoder = decode_instruction_jump},
+    {.id = LOOPZ, .name = "loopz", .decoder = decode_instruction_jump},
+    {.id = LOOPNZ, .name = "loopnz", .decoder = decode_instruction_jump},
+    {.id = JCXZ, .name = "jcxz", .decoder = decode_instruction_jump},
+    {.id = JZ, .name = "jz", .decoder = decode_instruction_jump},
 };
 
-enum instruction instruction_names_two_byte_prefix[] = {
-    MOV,
-    ADD,
-    SUB,
-    CMP,
-};
+struct two_byte_instruction instructions_two_byte_prefix[] = {
+    {
+        .id = MOV,
+        .name = "mov",
+    },
+    {
+        .id = ADD,
+        .name = "add",
+    },
+    {
+        .id = SUB,
+        .name = "sub",
+    },
+    {
+        .id = CMP,
+        .name = "cmp",
+    },
 
-char *instruction_id_to_name[] = {
-    "mov", "add", "sub", "cmp",  "jnz",   "jl",     "jle",  "jb",
-    "jbe", "jp",  "jo",  "js",   "jnl",   "jg",     "jnb",  "ja",
-    "jnp", "jno", "jns", "loop", "loopz", "loopnz", "jcxz", "jz"};
-
-int (*single_byte_instruction_prefix_decoders[])(
-    struct context *ctx, uint8_t instruction_byte, uint8_t instruction_buffer[],
-    enum instruction instruction_id) = {
-    decode_instruction_immediate_to_reg,         // mov bx, 6
-    decode_instruction_reg_mem_reg,              // mov ax, [bp + 2]
-    decode_instruction_immediate_to_accumulator, // add ax, 7
-    decode_instruction_reg_mem_reg,              // add ax, [bp +2]
-    decode_instruction_immediate_to_accumulator, // sub ax, 7
-    decode_instruction_reg_mem_reg,              // sub ax, [bp +2]
-    decode_instruction_immediate_to_accumulator, // cmp ax, 7
-    decode_instruction_reg_mem_reg,              // cmp ax, [bp +2]
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-    decode_instruction_jump,
-};
-
-int (*two_byte_instruction_prefix_decoders[])(
-    struct context *ctx, uint16_t instruction_bytes,
-    uint8_t instruction_buffer[],
-    enum instruction instruction_id) = {
-    decode_instruction_immediate_to_memory_reg, // mov [bp + 2], 7
-    decode_instruction_immediate_to_memory_reg, // add [bp + 2], 7
-    decode_instruction_immediate_to_memory_reg, // sub [bp + 2], 7
-    decode_instruction_immediate_to_memory_reg, // cmp [bp + 2], 7
 };
 
 uint16_t (*operations[])(uint16_t *destination, uint16_t *source) = {mov, add,
