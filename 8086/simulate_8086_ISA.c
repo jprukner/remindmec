@@ -271,17 +271,22 @@ int decode_instruction_immediate_to_memory_reg(
   char displacement_formated_buffer
       [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
 
+  // exec_destination is a pointer pointing to an address where the immediate
+  // should be stored.
+  uint16_t *exec_destination = NULL;
+
   ctx->ip += 2;
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
     fprintf(stderr, "%s mode: Register Mode\n", instruction.name);
     destination = register_word_map[word][reg_mem];
+    exec_destination = &(ctx->registers[reg_mem]);
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction.name);
-    destination = memory_displacement_expresion_table[mode][reg_mem];
     size_modifier = size_modifiers[word];
+    destination = memory_displacement_expresion_table[mode][reg_mem];
     if (reg_mem == 6) {
       // handle specail case for MODE=0b110 - direct address.
       fprintf(stderr,
@@ -296,6 +301,7 @@ int decode_instruction_immediate_to_memory_reg(
       }
       ctx->ip += 2;
       destination = displacement_formated_buffer;
+      exec_destination = &(ctx->memory[n]);
     }
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
@@ -334,10 +340,9 @@ int decode_instruction_immediate_to_memory_reg(
   ctx->ip += size;
 
   // simulate
-  if (mode == INSTRUCTION_MODE_REGISTER && word == 1) {
+  if (exec_destination != NULL && size == 2) {
     // Let's simulate only whole registers for now.
-    ctx->flags =
-        operations[instruction.id](&(ctx->registers[reg_mem]), &number);
+    *exec_destination = number;
   }
 
   printf("%s %s %s, %u\n", instruction.name, size_modifier, destination,
