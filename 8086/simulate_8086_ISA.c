@@ -250,7 +250,13 @@ int decode_instruction_immediate_to_memory_reg(
           instruction.name);
 
   uint8_t word = (instruction_word & word_mask) >> 8;
-  uint8_t sign_extension = (instruction_word & sign_extension_mask) >> 9;
+  uint8_t sign_extension;
+  if (instruction.id == MOV) {
+    // mov has this bit set to 1 always and size is guided only by word bit.
+    sign_extension = 0;
+  } else {
+    sign_extension = (instruction_word & sign_extension_mask) >> 9;
+  }
   fprintf(stderr, "word is %u\n", word);
   fprintf(stderr, "sign_extension is %u\n", sign_extension);
 
