@@ -146,7 +146,9 @@ int load_n_bytes_displacement(struct context *ctx, uint8_t n_bytes_displacement,
     fprintf(stderr, "failed to format displacement, n is %d\n", n);
     return -1;
   }
-  return 1;
+  // TODO return real address in different way, this is just for immediate
+  // address - mod 6 special case.
+  return displacement;
 }
 
 int decode_instruction_reg_mem_reg(struct context *ctx,
@@ -183,20 +185,18 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   char displacement_formated_buffer
       [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
 
+  uint16_t *exec_destination = NULL;
+  exec_destination = &(ctx->registers[reg]);
+  uint16_t *exec_source = NULL;
+
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
     fprintf(stderr, "%s mode: Register Mode\n", instruction.name);
     source = register_word_map[word][reg_mem];
     // simulate
-    // TODO THIS SIMULATION DOES NOT TAKE THE DIRECTION BIT INTO ACCOUNT.
-    uint8_t source_register_index = reg;
-    uint8_t destination_register_index = reg_mem;
-
     if (word == 1) {
       // let's simulate only whole registers for now.
-      ctx->flags = operations[instruction.id](
-          &(ctx->registers[destination_register_index]),
-          &(ctx->registers[source_register_index]));
+      exec_source = &(ctx->registers[reg_mem]);
     }
 
     break;
@@ -204,7 +204,22 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction.name);
     source = memory_displacement_expresion_table[mode][reg_mem];
-    // TODO handle specail case for MODE=0b110 - direct address.
+    if (reg_mem == 6) {
+      // handle specail case for MODE=0b110 - direct address.
+      fprintf(stderr,
+              "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
+              instruction.name);
+      int n = load_n_bytes_displacement(
+          ctx, 2, displacement_formated_buffer,
+          UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
+          instruction_buffer);
+      if (n < 0) {
+        return EXIT_FAILURE;
+      }
+      ctx->ip += 2;
+      source = displacement_formated_buffer;
+      exec_source = &(ctx->memory[n]);
+    }
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
@@ -233,7 +248,18 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
     const char *tmp = destination;
     destination = source;
     source = tmp;
+
+    uint16_t *temp = exec_destination;
+    exec_destination = exec_source;
+    exec_source = temp;
   }
+
+  // simulate
+  if (exec_destination != NULL && exec_source != NULL && word == 1) {
+    // Let's simulate only whole registers for now.
+    ctx->flags = operations[instruction.id](exec_destination, exec_source);
+  }
+
   printf("%s %s, %s\n", instruction.name, destination, source);
   return EXIT_SUCCESS;
 }
@@ -342,7 +368,7 @@ int decode_instruction_immediate_to_memory_reg(
   // simulate
   if (exec_destination != NULL && size == 2) {
     // Let's simulate only whole registers for now.
-    *exec_destination = number;
+    ctx->flags = operations[instruction.id](exec_destination, &number);
   }
 
   printf("%s %s %s, %u\n", instruction.name, size_modifier, destination,
@@ -436,6 +462,7 @@ int main(int argc, char *argv[]) {
 
   printf("bits 16\n\n");
   while (ctx.ip < fsize) {
+    fprintf(stderr, "---- next instruction ----\n");
     instruction_byte = instructions_buffer[ctx.ip];
     debug_byte_as_binary("first instruction byte as binary:", instruction_byte);
     int found = 0;
@@ -489,8 +516,6 @@ int main(int argc, char *argv[]) {
       exit_code = EXIT_FAILURE;
       goto exit;
     }
-
-    fprintf(stderr, "---- next instruction ----\n");
   }
 
   if (exec == 1) {
