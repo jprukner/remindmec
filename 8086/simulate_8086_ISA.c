@@ -389,7 +389,7 @@ int decode_instruction_immediate_to_memory_reg(
   ctx->ip += size;
 
   // simulate
-  if (exec_destination != NULL && size == 2) {
+  if (exec_destination != NULL) {
     // Let's simulate only whole registers for now.
     ctx->flags = operations[instruction.id](exec_destination, &number);
   }
@@ -484,6 +484,9 @@ int main(int argc, char *argv[]) {
   struct context ctx = {.memory = {0}, .registers = {0}, .ip = 0};
 
   printf("bits 16\n\n");
+
+  // TODO implement binary search or some other smarter way to lookup the
+  // prefix.
   while (ctx.ip < fsize) {
     fprintf(stderr, "---- next instruction ----\n");
     instruction_byte = instructions_buffer[ctx.ip];
