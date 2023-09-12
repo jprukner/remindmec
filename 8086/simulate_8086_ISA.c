@@ -415,6 +415,16 @@ uint16_t add(uint16_t *destination, uint16_t *source) {
 
   return flags;
 }
+void print_flags(uint16_t flags) {
+  printf("\tflags: ");
+  if ((flags & ZERO) != 0) {
+    printf("Z");
+  }
+  if ((flags & SIGN) != 0) {
+    printf("S");
+  }
+  printf("\n");
+}
 uint16_t sub(uint16_t *destination, uint16_t *source) {
   uint16_t result = *destination - *source;
   *destination = result;
@@ -434,27 +444,51 @@ uint16_t cmp(uint16_t *destination, uint16_t *source) {
   } else if ((0x8000 & result) != 0) {
     flags = flags | SIGN;
   }
+  print_flags(flags);
   return flags;
 }
 
 int main(int argc, char *argv[]) {
-  if (argc > 3 || argc < 2) {
-    fprintf(
-        stderr,
-        "%s expects optional '-exec' flag and mandatory 8086 executable path "
-        "%d arguments were given\n",
-        argv[0], argc - 1);
+  if (argc > 4 || argc < 2) {
+    fprintf(stderr,
+            "%s expects optional '-exec' and '-dump' flags and mandatory 8086 "
+            "executable path "
+            "%d arguments were given\n",
+            argv[0], argc - 1);
     return EXIT_FAILURE;
   }
   const char *filename;
   int exec = 0;
-  if (argc == 2) {
+  int dump = 0;
+  switch (argc) {
+  case 2:
     filename = argv[1];
-  } else {
+  case 3:
     filename = argv[2];
-    exec = 1;
+    if (strcmp(argv[1], "-exec") == 0) {
+      exec = 1;
+    } else if (strcmp(argv[1], "-dump") == 0) {
+      dump = 1;
+    } else {
+      fprintf(stderr, "no such flag '%s'\n", argv[1]);
+      return EXIT_FAILURE;
+    }
+  case 4:
+    filename = argv[3];
+    if (strcmp(argv[1], "-exec") == 0 && strcmp(argv[2], "-dump") == 0) {
+      exec = 1;
+      dump = 1;
+    } else if (strcmp(argv[2], "-exec") == 0 && strcmp(argv[1], "-dump") == 0) {
+      exec = 1;
+      dump = 1;
+    } else {
+      fprintf(stderr, "one of the flags does not exist '%s', '%s'\n", argv[1],
+              argv[2]);
+      return EXIT_FAILURE;
+    }
   }
-  fprintf(stderr, "disassembling file %s\n", filename);
+  fprintf(stderr, "disassembling file %s, exec is %d, dump is %d\n", filename,
+          exec, dump);
   FILE *executable = fopen(filename, "rb");
   fseek(executable, 0, SEEK_END);
   long fsize = ftell(executable);
@@ -551,16 +585,27 @@ int main(int argc, char *argv[]) {
              ctx.registers[i]);
     }
     printf("\tip: %04x (%d)\n", ctx.ip, ctx.ip);
-    printf("\tflags: ");
-    if ((ctx.flags & ZERO) != 0) {
-      printf("Z");
-    }
-    if ((ctx.flags & SIGN) != 0) {
-      printf("S");
-    }
-    printf("\n");
+    print_flags(ctx.flags);
   }
 
+  if (dump == 1) {
+    char *dump_data_filename = malloc(sizeof(char) * strlen(filename));
+    memcpy(dump_data_filename, filename, sizeof(char) * strlen(filename));
+    dump_data_filename = strcat(dump_data_filename, ".data");
+    fprintf(stderr, "dumping the memory to a file %s\n", dump_data_filename);
+    FILE *data = fopen(dump_data_filename, "wb");
+    if (data == NULL) {
+      fprintf(stderr, "failed to open the file");
+    }
+    free(dump_data_filename);
+    size_t memory_size = sizeof(ctx.memory) / sizeof(ctx.memory[0]);
+    int n = fwrite(ctx.memory, memory_size, 1, data);
+    if (n != 1) {
+      exit_code = EXIT_FAILURE;
+      fprintf(stderr, "failed to write memory to a file\n");
+    }
+    fclose(data);
+  }
 exit:
   free(instructions_buffer);
   return exit_code;
