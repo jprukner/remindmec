@@ -463,6 +463,7 @@ int main(int argc, char *argv[]) {
   switch (argc) {
   case 2:
     filename = argv[1];
+    break;
   case 3:
     filename = argv[2];
     if (strcmp(argv[1], "-exec") == 0) {
@@ -473,6 +474,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "no such flag '%s'\n", argv[1]);
       return EXIT_FAILURE;
     }
+    break;
   case 4:
     filename = argv[3];
     if (strcmp(argv[1], "-exec") == 0 && strcmp(argv[2], "-dump") == 0) {
@@ -486,6 +488,10 @@ int main(int argc, char *argv[]) {
               argv[2]);
       return EXIT_FAILURE;
     }
+    break;
+  default:
+    fprintf(stderr, "invalid number of arguments\n");
+    return EXIT_FAILURE;
   }
   fprintf(stderr, "disassembling file %s, exec is %d, dump is %d\n", filename,
           exec, dump);
