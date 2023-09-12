@@ -16,9 +16,28 @@ struct two_byte_prefix_instruction {
 
 struct context {
   uint8_t memory[1024 * 1024];
-  uint16_t registers[8];
+  // 9th register is ZERO_REGISTER that always contains zero.
+  uint16_t registers[9];
   uint16_t flags;
   uint16_t ip; // instruction pointer
+};
+
+enum register_index {
+  AX,
+  CX,
+  DX,
+  BX,
+  SP,
+  BP,
+  SI,
+  DI,
+  ZERO_REGISTER,
+};
+
+struct displacement {
+  const char *template;
+  enum register_index first_register;
+  enum register_index second_register;
 };
 
 enum flag {

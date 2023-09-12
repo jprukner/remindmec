@@ -121,34 +121,42 @@ int decode_instruction_jump(struct context *ctx, uint8_t instruction_byte,
 
   return EXIT_SUCCESS;
 }
+
 int load_n_bytes_displacement(struct context *ctx, uint8_t n_bytes_displacement,
                               char formated_displacement_output[],
                               uint8_t formated_displacement_output_legth,
-                              const char *displacement_template,
-                              uint8_t instruction_buffer[]) {
-  if (n_bytes_displacement != 2 && n_bytes_displacement != 1) {
-    fprintf(stderr, "expected 1 or 2 bytes displacement, got %u\n",
+                              struct displacement displacement,
+                              uint8_t instruction_buffer[],
+                              uint16_t *memory_address) {
+  if (n_bytes_displacement > 2) {
+    fprintf(stderr, "expected 0, 1 or 2 bytes displacement, got %u\n",
             n_bytes_displacement);
     return -1;
   }
 
-  uint16_t displacement = 0;
-  int n = read_n_bytes_as_number(ctx, n_bytes_displacement, &displacement,
+  uint16_t offset = 0;
+  int n = read_n_bytes_as_number(ctx, n_bytes_displacement, &offset,
                                  instruction_buffer);
   if (n < 0) {
     return -1;
   }
 
   n = snprintf(formated_displacement_output, formated_displacement_output_legth,
-               displacement_template, displacement);
+               displacement.template, offset);
 
   if (n < 0 || n >= UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH) {
     fprintf(stderr, "failed to format displacement, n is %d\n", n);
     return -1;
   }
-  // TODO return real address in different way, this is just for immediate
-  // address - mod 6 special case.
-  return displacement;
+
+  // Add registers to the offset if there are any.
+  offset += ctx->registers[displacement.first_register];
+  offset += ctx->registers[displacement.second_register];
+
+  // Return final offset using this pointer.
+  *memory_address = offset;
+
+  return 0;
 }
 
 int decode_instruction_reg_mem_reg(struct context *ctx,
@@ -188,6 +196,8 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   uint16_t *exec_destination = NULL;
   exec_destination = &(ctx->registers[reg]);
   uint16_t *exec_source = NULL;
+  uint16_t memory_address = 0;
+  struct displacement displacement;
 
   switch (mode) {
   case INSTRUCTION_MODE_REGISTER:
@@ -203,23 +213,27 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_NO_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction.name);
-    source = memory_displacement_expresion_table[mode][reg_mem];
+    displacement = memory_displacements[mode][reg_mem];
+    uint8_t displacement_size;
     if (reg_mem == 6) {
       // handle specail case for MODE=0b110 - direct address.
       fprintf(stderr,
               "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
               instruction.name);
-      int n = load_n_bytes_displacement(
-          ctx, 2, displacement_formated_buffer,
-          UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
-          instruction_buffer);
-      if (n < 0) {
-        return EXIT_FAILURE;
-      }
-      ctx->ip += 2;
-      source = displacement_formated_buffer;
-      exec_source = &(ctx->memory[n]);
+      displacement_size = 2;
+    } else {
+      displacement_size = 0;
     }
+    int n = load_n_bytes_displacement(
+        ctx, displacement_size, displacement_formated_buffer,
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, displacement,
+        instruction_buffer, &memory_address);
+    if (n < 0) {
+      return EXIT_FAILURE;
+    }
+    ctx->ip += displacement_size;
+    source = displacement_formated_buffer;
+    exec_source = &(ctx->memory[memory_address]);
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
@@ -227,17 +241,18 @@ int decode_instruction_reg_mem_reg(struct context *ctx,
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction.name, mode);
-    source = memory_displacement_expresion_table[mode][reg_mem];
+    displacement = memory_displacements[mode][reg_mem];
     int status = load_n_bytes_displacement(
         ctx, mode, displacement_formated_buffer,
-        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, source,
-        instruction_buffer);
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, displacement,
+        instruction_buffer, &memory_address);
     if (status < 0) {
       return EXIT_FAILURE;
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
     source = displacement_formated_buffer;
     ctx->ip += mode;
+    exec_source = &(ctx->memory[memory_address]);
     break;
   default:
     debug_byte_as_binary("unknown mode: ", mode);
@@ -290,9 +305,11 @@ int decode_instruction_immediate_to_memory_reg(
   uint8_t reg_mem = instruction_word & register_memory_mask;
   debug_byte_as_binary("reg/mem:", reg_mem);
 
+  struct displacement displacement;
   const char *destination = NULL;
   const char *size_modifier = "";
   uint16_t number = 0;
+  uint16_t memory_address = 0;
 
   char displacement_formated_buffer
       [UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH] = {0};
@@ -312,23 +329,28 @@ int decode_instruction_immediate_to_memory_reg(
     fprintf(stderr, "%s mode: Memory Mode, no displacement\n",
             instruction.name);
     size_modifier = size_modifiers[word];
-    destination = memory_displacement_expresion_table[mode][reg_mem];
+    displacement = memory_displacements[mode][reg_mem];
+    uint8_t displacement_size;
     if (reg_mem == 6) {
       // handle specail case for MODE=0b110 - direct address.
       fprintf(stderr,
               "%s mode: Memory Mode, special mode 6 - 16bit displacement\n",
               instruction.name);
-      int n = load_n_bytes_displacement(
-          ctx, 2, displacement_formated_buffer,
-          UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
-          instruction_buffer);
-      if (n < 0) {
-        return EXIT_FAILURE;
-      }
-      ctx->ip += 2;
-      destination = displacement_formated_buffer;
-      exec_destination = &(ctx->memory[n]);
+      displacement_size = 2;
+    } else {
+      displacement_size = 0;
     }
+    int n = load_n_bytes_displacement(
+        ctx, displacement_size, displacement_formated_buffer,
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, displacement,
+        instruction_buffer, &memory_address);
+    if (n < 0) {
+      return EXIT_FAILURE;
+    }
+    ctx->ip += displacement_size;
+    destination = displacement_formated_buffer;
+    exec_destination = &(ctx->memory[memory_address]);
+    fprintf(stderr, "exec_destination: %p\n", exec_destination);
     break;
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_BYTE_DISPLACEMENT:
     // Let's FALLTHROUGH as this can be handled by following case by utilizing
@@ -336,17 +358,18 @@ int decode_instruction_immediate_to_memory_reg(
   case INSTRUCTION_MODE_REGISTER_TO_MEMORY_TWO_BYTE_DISPLACEMENT:
     fprintf(stderr, "%s mode: Memory Mode, %u byte displacement\n",
             instruction.name, mode);
-    destination = memory_displacement_expresion_table[mode][reg_mem];
-    int n = load_n_bytes_displacement(
+    displacement = memory_displacements[mode][reg_mem];
+    n = load_n_bytes_displacement(
         ctx, mode, displacement_formated_buffer,
-        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, destination,
-        instruction_buffer);
+        UNSIGNED_DISPLACEMENT_FORMATED_BUFFER_MAX_LENGTH, displacement,
+        instruction_buffer, &memory_address);
     if (n < 0) {
       return EXIT_FAILURE;
     }
     fprintf(stderr, "displacement: %s\n", displacement_formated_buffer);
     destination = displacement_formated_buffer;
     size_modifier = size_modifiers[word];
+    exec_destination = &(ctx->memory[memory_address]);
     ctx->ip += mode;
     break;
   default:
