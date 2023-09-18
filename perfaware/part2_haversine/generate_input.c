@@ -135,12 +135,11 @@ int main(int argc, char *argv[]) {
   // compute distances
   double *distances = malloc(sizeof(f64) * total_number_of_pairs);
   printf("distances: %p\n", distances);
-  uint64_t distances_count = 0;
+
   for (uint64_t a = 0; a < total_number_of_pairs; ++a) {
     struct point_pair pair = point_pairs[a];
-    distances[distances_count] =
+    distances[a] =
         ReferenceHaversine(pair.x0, pair.y0, pair.x1, pair.y1, EARTH_RADIUS);
-    distances_count += 1;
   }
   fprintf(stderr, "done computing distances\n");
   // compute average distance
@@ -148,10 +147,61 @@ int main(int argc, char *argv[]) {
   for (uint64_t n = 0; n < total_number_of_pairs; ++n) {
     sum += distances[n];
   }
+  f64 average_distance = sum / total_number_of_pairs;
+  fprintf(stderr, "avg distance: %f/%lu = %f\n", sum, total_number_of_pairs,
+          average_distance);
 
-  printf("avg distance: %f/%lu = %f\n", sum, total_number_of_pairs,
-         sum / total_number_of_pairs);
+  int exit_code = EXIT_SUCCESS;
+  {
+    // write input json file
+    FILE *data = fopen("pairs.json", "w");
+    if (data == NULL) {
+      exit_code = EXIT_FAILURE;
+      fprintf(stderr, "failed to open the file");
+      goto exit;
+    }
 
+    fprintf(data, "{\"pairs\":[");
+    for (uint64_t a = 0; a < total_number_of_pairs; ++a) {
+      struct point_pair pair = point_pairs[a];
+      fprintf(data, "{\"x0\":%f, \"y0\":%f, \"x1\":%f, \"y1\":%f}", pair.x0,
+              pair.y0, pair.x1, pair.y1);
+      if (a != total_number_of_pairs - 1) {
+        fprintf(data, ",\n");
+      } else {
+        fprintf(data, "\n");
+      }
+    }
+    fprintf(data, "]}");
+    fclose(data);
+  }
+
+  {
+    // write haversine distances as binary, last number is the average.
+    FILE *binary_distances = fopen("binary_distances.f64", "wb");
+    if (binary_distances == NULL) {
+      exit_code = EXIT_FAILURE;
+      fprintf(stderr, "failed to open the file");
+      goto exit;
+    }
+    int n = fwrite(distances, sizeof(f64) * total_number_of_pairs, 1,
+                   binary_distances);
+    if (n != 1) {
+      exit_code = EXIT_FAILURE;
+      fprintf(stderr, "failed to write haversine distances to binary file\n");
+    }
+    n = fwrite(&average_distance, sizeof(f64), 1, binary_distances);
+    if (n != 1) {
+      exit_code = EXIT_FAILURE;
+      fprintf(
+          stderr,
+          "failed to write average distance to the end of the binary file\n");
+    }
+
+    fclose(binary_distances);
+  }
+exit:
   free(distances);
   free(point_pairs);
+  return exit_code;
 }
