@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#define CLUSTER_RANGE 60
+
+#include "haversine.h"
+
+#define CLUSTER_RANGE 6000
 #define EARTH_RADIUS 6372.8
 
 typedef double f64;
@@ -45,13 +48,6 @@ int16_t random_in_range(int16_t lower, int16_t upper) {
   return (rand() % (upper - lower + 1)) + lower;
 }
 
-struct point_pair {
-  double x0;
-  double y0;
-  double x1;
-  double y1;
-};
-
 int main(int argc, char *argv[]) {
 
   if (argc < 3) {
@@ -85,27 +81,27 @@ int main(int argc, char *argv[]) {
   for (int n = 0; n < cluster_count; ++n) {
 
     uint64_t point_pairs_count = 0;
-    int16_t cluster_centre_x = random_in_range(-180, 180);
-    int16_t cluster_centre_y = random_in_range(-90, 90);
+    int16_t cluster_centre_x = random_in_range(-18000, 18000);
+    int16_t cluster_centre_y = random_in_range(-9000, 9000);
     while (point_pairs_count < point_pairs_per_cluster) {
       int16_t new_point_x_start = cluster_centre_x - (CLUSTER_RANGE / 2);
 
-      if (new_point_x_start < -180) {
-        new_point_x_start = -180;
+      if (new_point_x_start < -18000) {
+        new_point_x_start = -18000;
       }
       int16_t new_point_x_stop = cluster_centre_x + (CLUSTER_RANGE / 2);
-      if (new_point_x_stop > 180) {
-        new_point_x_stop = 180;
+      if (new_point_x_stop > 18000) {
+        new_point_x_stop = 18000;
       }
 
       int16_t new_point_y_start = cluster_centre_y - (CLUSTER_RANGE / 2);
-      if (new_point_y_start < -90) {
-        new_point_y_start = -90;
+      if (new_point_y_start < -9000) {
+        new_point_y_start = -9000;
       }
 
       int16_t new_point_y_stop = cluster_centre_y + (CLUSTER_RANGE / 2);
-      if (new_point_y_stop > 90) {
-        new_point_y_stop = 90;
+      if (new_point_y_stop > 9000) {
+        new_point_y_stop = 9000;
       }
 
       int16_t new_point_x0 =
@@ -121,10 +117,10 @@ int main(int argc, char *argv[]) {
           random_in_range(new_point_y_start, new_point_y_stop);
 
       struct point_pair pair = {
-          .x0 = new_point_x0,
-          .y0 = new_point_y0,
-          .x1 = new_point_x1,
-          .y1 = new_point_y1,
+          .x0 = ((double)new_point_x0) / 100,
+          .y0 = ((double)new_point_y0) / 100,
+          .x1 = ((double)new_point_x1) / 100,
+          .y1 = ((double)new_point_y1) / 100,
       };
       point_pairs[(n * point_pairs_per_cluster) + point_pairs_count] = pair;
 
