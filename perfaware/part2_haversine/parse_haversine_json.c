@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -146,9 +147,13 @@ int main(int argc, char *argv[]) {
   }
   fclose(json);
 
+  struct point_pair_array array = array_make(512);
   char first;
   char second;
   char third;
+  struct point_pair pair;
+  double *current_field;
+  uint64_t field_counter = 0;
   for (uint64_t n = 0; n < read; ++n) {
     first = read_buffer[n];
     if (n < read - 1) {
@@ -170,21 +175,25 @@ int main(int argc, char *argv[]) {
               first, second, third);
       return EXIT_FAILURE;
     } else if (expected == START_OF_X0_AFTER_NEXT_TOKEN) {
-      start_of_double_literal = n;
+      start_of_double_literal = n + 4;
       fprintf(stderr, "\nstart of x0 after next token detected %c%c%c\n", first,
               second, third);
+      current_field = &(pair.x0);
     } else if (expected == START_OF_X1_AFTER_NEXT_TOKEN) {
-      start_of_double_literal = n;
+      start_of_double_literal = n + 4;
       fprintf(stderr, "\nstart of x1 after next token detected %c%c%c\n", first,
               second, third);
+      current_field = &(pair.x1);
     } else if (expected == START_OF_Y0_AFTER_NEXT_TOKEN) {
-      start_of_double_literal = n;
+      start_of_double_literal = n + 4;
       fprintf(stderr, "\nstart of y0 after next token detected %c%c%c\n", first,
               second, third);
+      current_field = &(pair.y0);
     } else if (expected == START_OF_Y1_AFTER_NEXT_TOKEN) {
-      start_of_double_literal = n;
+      start_of_double_literal = n + 4;
       fprintf(stderr, "\nstart of y1 after next token detected %c%c%c\n", first,
               second, third);
+      current_field = &(pair.y1);
     } else if (expected == END_OF_SECTION) {
       read_buffer[n] = '\0'; // terminate the string, the character was read
                              // anyway so we can do that
@@ -193,8 +202,24 @@ int main(int argc, char *argv[]) {
       double_literal = read_buffer + start_of_double_literal;
       fprintf(stderr, "\nend of the section detected, double literal is %s\n",
               double_literal);
+      double number = atof(double_literal);
+      *current_field = number;
+      field_counter += 1;
     }
-    putchar(first);
+    if (field_counter == 4) {
+      field_counter = 0;
+      array = array_append(array, pair);
+      pair.x0 = 0;
+      pair.x1 = 0;
+      pair.y0 = 0;
+      pair.y1 = 0;
+    }
+    // putchar(first);
   }
+  for (int n = 0; n < array.length; ++n) {
+    fprintf(stderr, "x0: %f, y0: %f, x1: %f, y1: %f\n", array.data[n].x0,
+            array.data[n].y0, array.data[n].x1, array.data[n].y1);
+  }
+
   return EXIT_SUCCESS;
 }
