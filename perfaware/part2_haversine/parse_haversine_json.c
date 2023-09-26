@@ -139,12 +139,14 @@ int main(int argc, char *argv[]) {
   fseek(json, 0L, SEEK_END);
   size_t size = ftell(json);
   rewind(json);
-  char read_buffer[size];
+  fprintf(stderr, "size of the file is: %lu\n", size);
+  char *read_buffer = malloc(size);
   read = fread(read_buffer, 1, size, json);
   fprintf(stderr, "we just read %lu bytes\n", read);
   if (read != size) {
     fprintf(stderr, "number of bytes read %lu is not expected, %lu expected\n",
             read, size);
+    free(read_buffer);
     return EXIT_FAILURE;
   }
   fclose(json);
@@ -219,10 +221,13 @@ int main(int argc, char *argv[]) {
     }
     // putchar(first);
   }
-  for (int n = 0; n < array.length; ++n) {
-    fprintf(stderr, "x0: %f, y0: %f, x1: %f, y1: %f\n", array.data[n].x0,
-            array.data[n].y0, array.data[n].x1, array.data[n].y1);
-  }
-
+  // for (int n = 0; n < array.length; ++n) {
+  //   fprintf(stderr, "x0: %f, y0: %f, x1: %f, y1: %f\n", array.data[n].x0,
+  //           array.data[n].y0, array.data[n].x1, array.data[n].y1);
+  // }
+  free(read_buffer);
+  double *distances = malloc(sizeof(double) * array.length);
+  double avg = AvgDistance(array.data, distances, array.length);
+  fprintf(stderr, "avg haversine destination based on loaded data: %f\n", avg);
   return EXIT_SUCCESS;
 }
