@@ -100,8 +100,10 @@ int is_expected(char first, char second, char third) {
     }
     return UNEXPECTED_TOKEN;
   case ',':
-    if (second == ' ' || second == '\n') {
+    if (second == ' ') {
       return END_OF_SECTION;
+    } else if (second == '\n') {
+      return EXPECTED_TOKEN;
     }
     return UNEXPECTED_TOKEN;
   case ' ':
@@ -200,8 +202,9 @@ int main(int argc, char *argv[]) {
       // this way we can construct a literal
       // without allocating memory
       double_literal = read_buffer + start_of_double_literal;
-      fprintf(stderr, "\nend of the section detected, double literal is %s\n",
+      fprintf(stderr, "end of the section detected, double literal is %s\n",
               double_literal);
+      fprintf(stderr, "end of the section at `%c%c%c`\n", first, second, third);
       double number = atof(double_literal);
       *current_field = number;
       field_counter += 1;
