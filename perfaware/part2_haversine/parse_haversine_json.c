@@ -180,23 +180,15 @@ int main(int argc, char *argv[]) {
       return EXIT_FAILURE;
     } else if (expected == START_OF_X0_AFTER_NEXT_TOKEN) {
       start_of_double_literal = n + 4;
-      fprintf(stderr, "\nstart of x0 after next token detected %c%c%c\n", first,
-              second, third);
       current_field = &(pair.x0);
     } else if (expected == START_OF_X1_AFTER_NEXT_TOKEN) {
       start_of_double_literal = n + 4;
-      fprintf(stderr, "\nstart of x1 after next token detected %c%c%c\n", first,
-              second, third);
       current_field = &(pair.x1);
     } else if (expected == START_OF_Y0_AFTER_NEXT_TOKEN) {
       start_of_double_literal = n + 4;
-      fprintf(stderr, "\nstart of y0 after next token detected %c%c%c\n", first,
-              second, third);
       current_field = &(pair.y0);
     } else if (expected == START_OF_Y1_AFTER_NEXT_TOKEN) {
       start_of_double_literal = n + 4;
-      fprintf(stderr, "\nstart of y1 after next token detected %c%c%c\n", first,
-              second, third);
       current_field = &(pair.y1);
     } else if (expected == END_OF_SECTION) {
       read_buffer[n] = '\0'; // terminate the string, the character was read
@@ -204,9 +196,6 @@ int main(int argc, char *argv[]) {
       // this way we can construct a literal
       // without allocating memory
       double_literal = read_buffer + start_of_double_literal;
-      fprintf(stderr, "end of the section detected, double literal is %s\n",
-              double_literal);
-      fprintf(stderr, "end of the section at `%c%c%c`\n", first, second, third);
       double number = atof(double_literal);
       *current_field = number;
       field_counter += 1;
@@ -228,6 +217,7 @@ int main(int argc, char *argv[]) {
   free(read_buffer);
   double *distances = malloc(sizeof(double) * array.length);
   double avg = AvgDistance(array.data, distances, array.length);
+  array_free(array);
   fprintf(stderr, "avg haversine destination based on loaded data: %f\n", avg);
   return EXIT_SUCCESS;
 }
