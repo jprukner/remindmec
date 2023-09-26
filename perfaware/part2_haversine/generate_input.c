@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,42 +6,6 @@
 #include "haversine.h"
 
 #define CLUSTER_RANGE 6000
-#define EARTH_RADIUS 6372.8
-
-typedef double f64;
-
-static f64 Square(f64 A) {
-  f64 Result = (A * A);
-  return Result;
-}
-
-static f64 RadiansFromDegrees(f64 Degrees) {
-  f64 Result = 0.01745329251994329577 * Degrees;
-  return Result;
-}
-
-static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1, f64 EarthRadius) {
-
-  f64 lat1 = Y0;
-  f64 lat2 = Y1;
-  f64 lon1 = X0;
-  f64 lon2 = X1;
-
-  f64 dLat = RadiansFromDegrees(lat2 - lat1);
-  f64 dLon = RadiansFromDegrees(lon2 - lon1);
-  lat1 = RadiansFromDegrees(lat1);
-  lat2 = RadiansFromDegrees(lat2);
-
-  f64 a =
-      Square(sin(dLat / 2.0)) + cos(lat1) * cos(lat2) * Square(sin(dLon / 2));
-  f64 c = 2.0 * asin(sqrt(a));
-
-  f64 Result = EarthRadius * c;
-
-  return Result;
-}
-
-double sum(double *values, uint64_t count) { return 0; }
 
 int16_t random_in_range(int16_t lower, int16_t upper) {
   return (rand() % (upper - lower + 1)) + lower;
@@ -129,23 +92,10 @@ int main(int argc, char *argv[]) {
   }
 
   // compute distances
-  double *distances = malloc(sizeof(f64) * total_number_of_pairs);
-  printf("distances: %p\n", distances);
-
-  for (uint64_t a = 0; a < total_number_of_pairs; ++a) {
-    struct point_pair pair = point_pairs[a];
-    distances[a] =
-        ReferenceHaversine(pair.x0, pair.y0, pair.x1, pair.y1, EARTH_RADIUS);
-  }
-  fprintf(stderr, "done computing distances\n");
-  // compute average distance
-  double sum = 0;
-  for (uint64_t n = 0; n < total_number_of_pairs; ++n) {
-    sum += distances[n];
-  }
-  f64 average_distance = sum / total_number_of_pairs;
-  fprintf(stderr, "avg distance: %f/%lu = %f\n", sum, total_number_of_pairs,
-          average_distance);
+  f64 *distances = malloc(sizeof(f64) * total_number_of_pairs);
+  f64 average_distance =
+      AvgDistance(point_pairs, distances, total_number_of_pairs);
+  fprintf(stderr, "avg distance: %f\n", average_distance);
 
   int exit_code = EXIT_SUCCESS;
   {
