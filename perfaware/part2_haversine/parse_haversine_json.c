@@ -117,7 +117,8 @@ int is_expected(char first, char second, char third) {
 }
 
 int main(int argc, char *argv[]) {
-  uint64_t start = read_os_timer();
+  uint64_t os_timer_start = read_os_timer();
+  uint64_t cpu_timer_start = read_cpu_timer();
   if (argc < 2) {
     fprintf(stderr,
             "expected exactly 1 arguments %d given: path to json file "
@@ -127,15 +128,14 @@ int main(int argc, char *argv[]) {
   }
   const char *path = argv[1];
 
-  // open json file
+  // read json file
   int exit_code = EXIT_SUCCESS;
+  uint64_t file_reading_start = read_cpu_timer();
   FILE *json = fopen(path, "r");
   if (json == NULL) {
     fprintf(stderr, "failed to open the file\n");
     return EXIT_FAILURE;
   }
-
-  // parse it
   size_t read = 0;
   int start_of_double_literal = 0;
   char *double_literal = NULL;
@@ -153,7 +153,11 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   fclose(json);
+  uint64_t file_reading_stop = read_cpu_timer();
+  uint64_t file_reading_elapsed = file_reading_stop - file_reading_start;
 
+  // parse it
+  uint64_t file_parsing_start = read_cpu_timer();
   struct point_pair_array array = array_make(512);
   char first;
   char second;
@@ -218,13 +222,35 @@ int main(int argc, char *argv[]) {
   //           array.data[n].y0, array.data[n].x1, array.data[n].y1);
   // }
   free(read_buffer);
+  uint64_t file_parsing_stop = read_cpu_timer();
+  uint64_t file_parsing_elapsed = file_parsing_stop - file_parsing_start;
+
+  // compute avg
+  uint64_t distance_computing_start = read_cpu_timer();
   double *distances = malloc(sizeof(double) * array.length);
   double avg = AvgDistance(array.data, distances, array.length);
   array_free(array);
   fprintf(stderr, "avg haversine destination based on loaded data: %f\n", avg);
-  uint64_t stop = read_os_timer();
-  uint64_t elapsed = stop - start;
-  fprintf(stderr, "Seconds elapsed: %.4f\n",
-          (double)elapsed / (double)OS_TIMER_FREQUENCY);
+  uint64_t distance_computing_stop = read_cpu_timer();
+  uint64_t distance_computing_elapsed =
+      distance_computing_stop - distance_computing_start;
+
+  uint64_t os_timer_stop = read_os_timer();
+  uint64_t os_timer_elapsed = os_timer_stop - os_timer_start;
+
+  uint64_t cpu_timer_stop = read_cpu_timer();
+  uint64_t cpu_timer_elapsaed = cpu_timer_stop - cpu_timer_start;
+
+  fprintf(stderr, "Time elapsed: %.4fs\n",
+          (double)os_timer_elapsed / (double)OS_TIMER_FREQUENCY);
+
+  fprintf(stderr, "\tfile reading: %lu (%.2f%%)\n", file_reading_elapsed,
+          ((double)file_reading_elapsed / (double)cpu_timer_elapsaed) * 100);
+  fprintf(stderr, "\tfile parsing: %lu (%.2f%%)\n", file_parsing_elapsed,
+          ((double)file_parsing_elapsed / (double)cpu_timer_elapsaed) * 100);
+  fprintf(stderr, "\thaversine distance computing: %lu (%.2f%%)\n",
+          distance_computing_elapsed,
+          ((double)distance_computing_elapsed / (double)cpu_timer_elapsaed) *
+              100);
   return EXIT_SUCCESS;
 }

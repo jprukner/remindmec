@@ -13,4 +13,4 @@ uint64_t read_os_timer() {
   return result;
 }
 
-inline uint64_t read_cpu_timer() { return __rdtsc(); }
+uint64_t read_cpu_timer() { return __rdtsc(); }
