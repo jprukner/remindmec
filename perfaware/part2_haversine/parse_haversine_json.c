@@ -1,8 +1,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 #include "haversine.h"
+#include "metrics.c"
 
 // 32Ki
 #define READ_BUFFER_SIZE 32 * 1024
@@ -115,6 +117,7 @@ int is_expected(char first, char second, char third) {
 }
 
 int main(int argc, char *argv[]) {
+  uint64_t start = read_os_timer();
   if (argc < 2) {
     fprintf(stderr,
             "expected exactly 1 arguments %d given: path to json file "
@@ -219,5 +222,9 @@ int main(int argc, char *argv[]) {
   double avg = AvgDistance(array.data, distances, array.length);
   array_free(array);
   fprintf(stderr, "avg haversine destination based on loaded data: %f\n", avg);
+  uint64_t stop = read_os_timer();
+  uint64_t elapsed = stop - start;
+  fprintf(stderr, "Seconds elapsed: %.4f\n",
+          (double)elapsed / (double)OS_TIMER_FREQUENCY);
   return EXIT_SUCCESS;
 }
