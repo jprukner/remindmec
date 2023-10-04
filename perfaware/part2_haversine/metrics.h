@@ -25,7 +25,7 @@ struct timing {
 struct profiler {
   struct timing *timings;
   uint64_t start;
-  uint64_t timings_counter;
+  int64_t timings_counter;
 };
 
 static struct profiler _global_profiler;
@@ -35,25 +35,32 @@ static struct profiler _global_profiler;
 #define INIT_TIMER()                                                           \
   do {                                                                         \
     _global_profiler.timings =                                                 \
-        malloc(DEBUG_TIMERS_COUNT * sizeof(struct timing));                    \
+        calloc(DEBUG_TIMERS_COUNT, sizeof(struct timing));                     \
     _global_profiler.start = read_cpu_timer();                                 \
-    _global_profiler.timings_counter = 0;                                      \
+    _global_profiler.timings_counter = -1;                                     \
   } while (0)
 
 #define TIME_BLOCK(block_name)                                                 \
   uint64_t _start = read_cpu_timer();                                          \
+  int64_t origin = _global_profiler.timings_counter;                           \
   const char *label = block_name;
 
 #define TIME_FUNCTION TIME_BLOCK(__func__)
 
 #define END_TIMER()                                                            \
   do {                                                                         \
+    uint64_t _stop = read_cpu_timer();                                         \
     struct timing _timing = {0};                                               \
-    _timing.elapsed = read_cpu_timer() - _start;                               \
+    _timing.elapsed = _stop - _start;                                          \
     _timing.label = label;                                                     \
-    assert(_global_profiler.timings_counter < DEBUG_TIMERS_COUNT);             \
-    _global_profiler.timings[_global_profiler.timings_counter] = _timing;      \
+    uint64_t elapsed_in_nested_blocks = 0;                                     \
+    for (int64_t i = _global_profiler.timings_counter; i > origin; i--) {      \
+      struct timing nested_timing = _global_profiler.timings[i];               \
+      elapsed_in_nested_blocks += nested_timing.elapsed;                       \
+    }                                                                          \
+    _timing.elapsed -= elapsed_in_nested_blocks;                               \
     _global_profiler.timings_counter++;                                        \
+    _global_profiler.timings[_global_profiler.timings_counter] = _timing;      \
   } while (0)
 
 #define RETURN_NOTHING()                                                       \
@@ -71,7 +78,7 @@ static struct profiler _global_profiler;
 #define PRINT_TIMINGS()                                                        \
   do {                                                                         \
     uint64_t _elapsed_total = read_cpu_timer() - _global_profiler.start;       \
-    for (uint64_t i = 0; i < _global_profiler.timings_counter; ++i) {          \
+    for (uint64_t i = 0; i <= _global_profiler.timings_counter; ++i) {         \
       struct timing _timing = _global_profiler.timings[i];                     \
       printf("%s: %lu (%.2f %%)\n", _timing.label, _timing.elapsed,            \
              100 * ((double)_timing.elapsed / (double)_elapsed_total));        \
