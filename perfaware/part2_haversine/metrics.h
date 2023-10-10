@@ -25,6 +25,7 @@ struct timing {
 struct profiler {
   struct timing *timings;
   uint64_t start;
+  uint64_t start_os_time;
   int64_t timings_counter;
 };
 
@@ -36,8 +37,9 @@ static struct profiler _global_profiler;
   do {                                                                         \
     _global_profiler.timings =                                                 \
         calloc(DEBUG_TIMERS_COUNT, sizeof(struct timing));                     \
-    _global_profiler.start = read_cpu_timer();                                 \
     _global_profiler.timings_counter = -1;                                     \
+    _global_profiler.start_os_time = read_os_timer();                          \
+    _global_profiler.start = read_cpu_timer();                               \
   } while (0)
 
 #define TIME_BLOCK(block_name)                                                 \
@@ -78,9 +80,13 @@ static struct profiler _global_profiler;
 #define PRINT_TIMINGS()                                                        \
   do {                                                                         \
     uint64_t _elapsed_total = read_cpu_timer() - _global_profiler.start;       \
+    uint64_t elapsed_os_time_total =                                           \
+        read_os_timer() - _global_profiler.start_os_time;                      \
+    printf("\nTotal seconds elapsed: %f\n",                                              \
+           (double)elapsed_os_time_total / (double)OS_TIMER_FREQUENCY);        \
     for (uint64_t i = 0; i <= _global_profiler.timings_counter; ++i) {         \
       struct timing _timing = _global_profiler.timings[i];                     \
-      printf("%s: %lu (%.2f %%)\n", _timing.label, _timing.elapsed,            \
+      printf("\t%s: %lu (%.2f %%)\n", _timing.label, _timing.elapsed,            \
              100 * ((double)_timing.elapsed / (double)_elapsed_total));        \
     }                                                                          \
     free(_global_profiler.timings);                                            \
@@ -88,9 +94,12 @@ static struct profiler _global_profiler;
 
 #else
 
-#define INIT_TIMER ;
-#define TIME_IT ;
+#define INIT_TIMER()
+#define TIME_FUNCTION
+#define TIME_BLOCK(label)
+#define END_TIMER()
 #define RETURN(x) return x;
 #define RETURN_NOTHING return;
+#define PRINT_TIMINGS()
 
 #endif
