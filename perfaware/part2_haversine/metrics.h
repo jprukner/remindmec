@@ -28,7 +28,6 @@ struct timing {
 struct profiler {
   struct timing *timings;
   uint64_t start;
-  uint64_t start_os_time;
   int64_t timings_counter;
 };
 
@@ -67,7 +66,6 @@ static struct profiler _global_profiler;
     _global_profiler.timings =                                                 \
         calloc(DEBUG_TIMERS_COUNT, sizeof(struct timing));                     \
     _global_profiler.timings_counter = -1;                                     \
-    _global_profiler.start_os_time = read_os_timer();                          \
     _global_profiler.start = read_cpu_timer();                                 \
   } while (0)
 
