@@ -134,19 +134,23 @@ int main(int argc, char *argv[]) {
 	  int start_of_double_literal = 0;
 	  char *double_literal = NULL;
 	  char *read_buffer = NULL;
-
+	  size_t size = 0;
+	  FILE *json = NULL;
 {
-	TIME_BLOCK("read json file");
-	  // read json file
-	  FILE *json = fopen(path, "r");
+	TIME_BLOCK("get size of json file");
+	  json = fopen(path, "r");
 	  if (json == NULL) {
 	    fprintf(stderr, "failed to open the file\n");
 	    return EXIT_FAILURE;
 	  }
 	  fseek(json, 0L, SEEK_END);
-	  size_t size = ftell(json);
-	  read_buffer = malloc(size);
+	  size = ftell(json);
 	  rewind(json);
+	END_TIMER();
+}
+{
+	TIME_BLOCK_WITH_BANDWIDTH("read json file", size);
+	  read_buffer = malloc(size);
 	  fprintf(stderr, "size of the file is: %lu\n", size);
 	  read = fread(read_buffer, 1, size, json);
 	  fprintf(stderr, "we just read %lu bytes\n", read);
@@ -162,7 +166,7 @@ int main(int argc, char *argv[]) {
   // parse it
  struct point_pair_array array;
  {
-  TIME_BLOCK("parsing");
+  TIME_BLOCK_WITH_BANDWIDTH("parsing", size);
 	  array = array_make(4096);
 	  char first;
 	  char second;
