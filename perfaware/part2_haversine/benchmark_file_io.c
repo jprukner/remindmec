@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #define FILE_NAME "pairs.json"
+#define DO_ALLOCATION_EVERY_TIME 0
 
 void benchmark_fread(struct benchmark *benchmark, size_t size) {
   FILE *file = fopen(FILE_NAME, "r");
@@ -13,19 +14,27 @@ void benchmark_fread(struct benchmark *benchmark, size_t size) {
     return;
   }
 
-  char *buffer = malloc(size);
   int read = 0;
+  char *buffer = NULL;
   while (is_running(benchmark)) {
+    if(buffer == NULL || DO_ALLOCATION_EVERY_TIME) {
+        buffer = malloc(size);
+    }
     start(benchmark);
     read = fread(buffer, size, 1, file);
+    stop(benchmark);
     if (read != 1) {
       perror("failed to read file");
       fail(benchmark, "failed to read file");
     }
-    stop(benchmark);
     rewind(file);
+    if(DO_ALLOCATION_EVERY_TIME) {
+       free(buffer);
+    }
   }
-  free(buffer);
+  if(!DO_ALLOCATION_EVERY_TIME) {
+     free(buffer);
+  }
   fclose(file);
 }
 

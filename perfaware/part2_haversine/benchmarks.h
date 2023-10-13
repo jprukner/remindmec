@@ -2,6 +2,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
+// get resource usage
+// int getrusage(int who, struct rusage *usage);
+
 #define MAX_RUN_TIME_SECONDS 10
 
 enum status {
@@ -15,9 +21,15 @@ struct benchmark {
   uint64_t elapsed_min;
   enum status status;
   const char *error;
+  uint64_t start_page_faults_count;
 };
 
 void start(struct benchmark *benchmark) {
+  struct rusage usage;
+  if(getrusage(RUSAGE_SELF, &usage) < 0) {
+    perror("failed to get resource usage: ");
+  }
+  benchmark->start_page_faults_count = usage.ru_minflt + usage.ru_majflt;
   benchmark->start_cpu_time = read_cpu_timer();
   return;
 }
@@ -31,7 +43,13 @@ void stop(struct benchmark *benchmark) {
   if (elapsed < benchmark->elapsed_min) {
     benchmark->start_os_time = read_os_timer();
     benchmark->elapsed_min = elapsed;
-    printf("fastest run is now: %lu\n", elapsed);
+    struct rusage usage;
+    if(getrusage(RUSAGE_SELF, &usage) < 0) {
+      perror("failed to get resource usage: ");
+    }
+    uint64_t page_faults_count = (usage.ru_minflt + usage.ru_majflt) - benchmark->start_page_faults_count;
+    printf("fastest run is now: %lu and %lu page faults happened\n", elapsed, page_faults_count);
+
   }
   double elapsed_seconds =
       (double)(read_os_timer() - benchmark->start_os_time) /
