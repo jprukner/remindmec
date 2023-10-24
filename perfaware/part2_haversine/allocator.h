@@ -17,7 +17,7 @@ void *huge_malloc(size_t size){
 }
 
 int huge_free(void*addr, size_t size){
-	return munmap(addr, size);
+	return munmap(addr, required_pages(size)*HUGE_TABLE_2MB_SIZE);
 }
 
 void *huge_realloc(void* addr, size_t old_size, size_t new_size) {
@@ -29,7 +29,7 @@ void *huge_realloc(void* addr, size_t old_size, size_t new_size) {
 		return MAP_FAILED;
 	}
 	memcpy(new_addr, addr, old_size);
-	int status = munmap(addr, old_size);
+	int status = munmap(addr, required_pages(old_size)*HUGE_TABLE_2MB_SIZE);
 	if(status < 0) {
 		return MAP_FAILED;
 	}
