@@ -1,8 +1,10 @@
+#define _GNU_SOURCE
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-
+#include "allocator.h"
 #include "haversine.h"
 
 #define DEBUG_TIMERS_COUNT 1024
@@ -150,14 +152,18 @@ int main(int argc, char *argv[]) {
 }
 {
 	TIME_BLOCK_WITH_BANDWIDTH("read json file", size);
-	  read_buffer = malloc(size);
+	  read_buffer = huge_malloc(size);
+	  if(read_buffer == MAP_FAILED) {
+		perror("failed to use the allocator: ");
+		return EXIT_FAILURE;
+	  }
 	  fprintf(stderr, "size of the file is: %lu\n", size);
 	  read = fread(read_buffer, 1, size, json);
 	  fprintf(stderr, "we just read %lu bytes\n", read);
 	  if (read != size) {
 	    fprintf(stderr, "number of bytes read %lu is not expected, %lu expected\n",
 	            read, size);
-	    free(read_buffer);
+	    huge_free(read_buffer, size);
 	    return EXIT_FAILURE;
 	  }
 	  fclose(json);
@@ -230,7 +236,7 @@ int main(int argc, char *argv[]) {
  }
  {
  TIME_BLOCK("free read buffer");
-  free(read_buffer);
+  huge_free(read_buffer, size);
  END_TIMER();
  }
 
@@ -238,8 +244,7 @@ int main(int argc, char *argv[]) {
   {
           TIME_BLOCK("avg computing and output");
 	  double avg;
-	  double *distances = malloc(sizeof(double) * array.length);
-	  avg = AvgDistance(array.data, distances, array.length);
+	  avg = AvgDistance(array.data,  array.length);
 	  {
 	    TIME_BLOCK("free array of distances");
 	    array_free(array);

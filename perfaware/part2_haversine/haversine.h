@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "allocator.h"
 
 #define EARTH_RADIUS 6372.8
 
@@ -26,23 +27,30 @@ struct point_pair_array array_make(uint64_t capacity) {
     array.capacity = 64;
   }
   array.data =
-      (struct point_pair *)malloc(array.capacity * sizeof(struct point_pair));
+      (struct point_pair *)huge_malloc(array.capacity * sizeof(struct point_pair));
+  if (array.data == MAP_FAILED) {
+	perror("failed to create an array: ");
+  }
   return array;
 }
 
 struct point_pair_array array_append(struct point_pair_array array,
                                      struct point_pair pair) {
   if (array.length + 1 >= array.capacity) {
+    size_t old_capacity = array.capacity;
     array.capacity = array.capacity * 2;
-    array.data = (struct point_pair *)realloc(
-        (void *)array.data, array.capacity * sizeof(struct point_pair));
+    array.data = (struct point_pair *)huge_realloc(
+        (void *)array.data, old_capacity*sizeof(struct point_pair), array.capacity * sizeof(struct point_pair));
+    if (array.data == MAP_FAILED) {
+          perror("failed to scale the array: ");
+    }
   }
   array.data[array.length] = pair;
   array.length += 1;
   return array;
 }
 
-void array_free(struct point_pair_array array) { free(array.data); }
+int array_free(struct point_pair_array array) { huge_free(array.data, array.capacity * sizeof(struct point_pair)); }
 
 typedef double f64;
 
@@ -77,15 +85,13 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1, f64 EarthRadius) {
   return Result;
 }
 
-f64 AvgDistance(struct point_pair array[], double *distances_destination,
-                uint64_t length) {
+f64 AvgDistance(struct point_pair array[], uint64_t length) {
 
   double sum = 0;
   for (uint64_t a = 0; a < length; ++a) {
     struct point_pair pair = array[a];
     double distance =
         ReferenceHaversine(pair.x0, pair.y0, pair.x1, pair.y1, EARTH_RADIUS);
-    distances_destination[a] = distance;
     sum += distance;
   }
   // compute average distance
