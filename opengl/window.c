@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 #define SCR_WIDTH 800
 #define SCR_HEIGHT 600
 
@@ -64,10 +65,17 @@ int main() {
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
-  uint32_t shaderProgram = create_program("vertex.vs", "fragment.fs");
+  uint32_t shaderProgram = create_program("../vertex.vs", "../fragment.fs");
 
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+ // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  GLint input_color_location = glGetUniformLocation(shaderProgram, "input_color");
+  if(input_color_location < 0) {
+    fprintf(stderr, "failed to get location of input_color\n");
+    glfwTerminate();
+    return 1;
+  }
+  float time;
+  float green_part;
   while (!glfwWindowShouldClose(window)) {
     processInput(window);
     // ------
@@ -75,6 +83,9 @@ int main() {
     glClear(GL_COLOR_BUFFER_BIT);
     // -- draw a triangle
     glUseProgram(shaderProgram);
+    time = glfwGetTime();
+    green_part = (sin(time) / 2.0f) + 0.5f;
+    glUniform4f(input_color_location, 1.0f, green_part, 1.0f, 1.0f);
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
