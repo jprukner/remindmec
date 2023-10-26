@@ -10,6 +10,7 @@ find_package(glfw3 REQUIRED)
 add_executable(learn_opengl
     window.c
     shader.c
+    texture.c
     glad/src/glad.c
 )
 

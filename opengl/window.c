@@ -1,9 +1,12 @@
-#include "shader.h"
-#include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
+
+#include "shader.h"
+#include "texture.h"
+
 #define SCR_WIDTH 800
 #define SCR_HEIGHT 600
 
@@ -39,10 +42,11 @@ int main() {
   }
 
   float vertices[] = {
-      -0.5f, 0.5f,  0.0f, // top left
-      0.5f,  0.5f,  0.0f, // top right
-      -0.5f, -0.5f, 0.0f, // bottom left
-      0.5f,  -0.5f, 0.0f  // bottom right
+      // coordinates      // texture coordinates
+      -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, // top left
+      0.5f,  0.5f,  0.0f, 1.0f, 1.0f, // top right
+      -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
+      0.5f,  -0.5f, 0.0f, 1.0f, 0.0f // bottom right
   };
 
   unsigned int indecies[] = {0, 1, 2, 1, 2, 3};
@@ -60,32 +64,36 @@ int main() {
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indecies), indecies,
                GL_STATIC_DRAW);
 
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
+
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3*sizeof(float)));
+  glEnableVertexAttribArray(1);
+
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
-  uint32_t shaderProgram = create_program("../vertex.vs", "../fragment.fs");
-
- // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  GLint input_color_location = glGetUniformLocation(shaderProgram, "input_color");
-  if(input_color_location < 0) {
-    fprintf(stderr, "failed to get location of input_color\n");
-    glfwTerminate();
-    return 1;
+  GLuint shaderProgram = create_program("../vertex.vs", "../fragment.fs");
+  if (shaderProgram == GL_INVALID_VALUE) {
+	glfwTerminate();
+	return 1;
   }
-  float time;
-  float green_part;
+
+  GLuint texture = load_image_as_texture("../bricks.png");
+
+  if (texture == GL_INVALID_VALUE) {
+	glfwTerminate();
+	return 1;
+  }
+ // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   while (!glfwWindowShouldClose(window)) {
     processInput(window);
     // ------
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     // -- draw a triangle
+    glBindTexture(GL_TEXTURE_2D, texture);
     glUseProgram(shaderProgram);
-    time = glfwGetTime();
-    green_part = (sin(time) / 2.0f) + 0.5f;
-    glUniform4f(input_color_location, 1.0f, green_part, 1.0f, 1.0f);
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);

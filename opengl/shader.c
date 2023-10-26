@@ -7,7 +7,7 @@ GLuint load_shader(const char *shader_path, GLenum shader_type) {
   struct stat s;
   if (stat(shader_path, &s) < 0) {
     perror("failed to stat shader file");
-    return 0;
+    return GL_INVALID_VALUE;
   }
 
   char *shader_source = malloc(s.st_size);
@@ -17,7 +17,7 @@ GLuint load_shader(const char *shader_path, GLenum shader_type) {
     free(shader_source);
     fclose(file);
     perror("failed to read shader file");
-    return 0;
+    return GL_INVALID_VALUE;
   }
   fclose(file);
 
@@ -31,8 +31,8 @@ GLuint load_shader(const char *shader_path, GLenum shader_type) {
   if (!success) {
     char infoLog[512];
     glGetShaderInfoLog(shader, 512, NULL, infoLog);
-    fprintf(stderr, "failed to compile vertex shader: %s\n", infoLog);
-    return 0;
+    fprintf(stderr, "failed to compile %s shader: %s\n", shader_path, infoLog);
+    return GL_INVALID_VALUE;
   }
   return shader;
 }
