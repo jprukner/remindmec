@@ -11,6 +11,7 @@ add_executable(learn_opengl
     window.c
     shader.c
     texture.c
+    matrix.c
     glad/src/glad.c
 )
 

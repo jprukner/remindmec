@@ -6,6 +6,7 @@
 
 #include "shader.h"
 #include "texture.h"
+#include "matrix.h"
 
 #define SCR_WIDTH 800
 #define SCR_HEIGHT 600
@@ -85,6 +86,15 @@ int main() {
 	glfwTerminate();
 	return 1;
   }
+
+  GLuint transform_location = glGetUniformLocation(shaderProgram, "transform");
+  if(transform_location < 0) {
+	glfwTerminate();
+	return 1;
+  }
+  float transform[16];
+  print_matrix(transform, 4, 4);
+
  // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   while (!glfwWindowShouldClose(window)) {
     processInput(window);
@@ -94,6 +104,8 @@ int main() {
     // -- draw a triangle
     glBindTexture(GL_TEXTURE_2D, texture);
     glUseProgram(shaderProgram);
+    rotation_matrix_z(transform, (float)glfwGetTime());
+    glUniformMatrix4fv(transform_location, 1, GL_TRUE, transform);
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
