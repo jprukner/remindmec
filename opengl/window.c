@@ -93,7 +93,6 @@ int main() {
 	return 1;
   }
   float transform[16];
-  print_matrix(transform, 4, 4);
 
  // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   while (!glfwWindowShouldClose(window)) {

@@ -25,11 +25,11 @@ void transpose(float* matrix, unsigned width, unsigned int height){
 
 // rotation_matrix_x expects 4x4 matrix;
 void rotation_matrix_z(float *matrix, float angle){
-	memset(matrix, 0, sizeof(float)*16);
-	matrix[0]=cos(angle);
-	matrix[1]=-sin(angle);
-	matrix[4]=sin(angle);
-	matrix[5]=cos(angle);
-	matrix[10]=1;
-	matrix[15]=1;
+	float rotation[] = {
+		cos(angle), -sin(angle), 0, 0,
+		sin(angle), cos(angle),  0, 0,
+		0,          0,           1, 0,
+		0,          0,           0, 1
+	};
+	memcpy(matrix, rotation, sizeof(rotation));
 }
