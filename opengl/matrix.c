@@ -33,3 +33,36 @@ void rotation_matrix_z(float *matrix, float angle){
 	};
 	memcpy(matrix, rotation, sizeof(rotation));
 }
+
+void rotation_matrix_y(float *matrix, float angle){
+	float rotation[] = {
+		cos(angle), 0, sin(angle), 0,
+		0,          1, 0,          0,
+		-sin(angle),0, cos(angle), 0,
+		0,          0,           0, 1
+	};
+	memcpy(matrix, rotation, sizeof(rotation));
+}
+
+
+void projection_matrix(float fov, float width_to_height_ratio, float near_z, float far_z, float *matrix) {
+	float z_range = near_z - far_z;
+	float a = (-far_z - near_z)/z_range;
+	float b = (2.0f * far_z * near_z)/z_range;
+	float p = 1/tan(fov/2.0f);
+	float pp = 1/(tan(fov/2.0f)*width_to_height_ratio);
+	float projection[16] = {
+		pp,   0.0f, 0.0f, 0.0f,
+		0.0f, p,    0.0f, 0.0f,
+		0.0f, 0.0f, a,    b,
+		0.0f, 0.0f, 1.0f, 0.0f
+	};
+//	float projection[] = {
+//		p, 0, 0, 0,
+//		0, p, 0, 0,
+//		0, 0, 1, 0,
+//		0, 0, 1, 0
+//	};
+	print_matrix(projection, 4, 4);
+	memcpy(matrix, projection, sizeof(projection));
+}

@@ -8,7 +8,7 @@
 #include "texture.h"
 #include "matrix.h"
 
-#define SCR_WIDTH 800
+#define SCR_WIDTH 1200
 #define SCR_HEIGHT 600
 
 void processInput(GLFWwindow *window) {
@@ -44,13 +44,40 @@ int main() {
 
   float vertices[] = {
       // coordinates      // texture coordinates
-      -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, // top left
-      0.5f,  0.5f,  0.0f, 1.0f, 1.0f, // top right
-      -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
-      0.5f,  -0.5f, 0.0f, 1.0f, 0.0f // bottom right
+      -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, // top left, front
+      0.5f,  0.5f,  0.0f, 1.0f, 1.0f, // top right, front
+      -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left, front
+      0.5f,  -0.5f, 0.0f, 1.0f, 0.0f // bottom right, front
+
+      -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, // top left, back
+      0.5f,  0.5f, -0.5f, 1.0f, 1.0f, // top right, back
+      -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, // bottom left, back
+      0.5f,  -0.5f, -0.5f, 1.0f, 0.0f // bottom right, back
   };
 
-  unsigned int indecies[] = {0, 1, 2, 1, 2, 3};
+  unsigned int indecies[] = {
+	// front
+	2, 3, 0,
+	0, 1, 3,
+	// bottom
+	2, 6, 3,
+	3, 7, 6,
+	// top
+	0, 4, 5,
+	5, 1, 0,
+	// left
+	0, 2, 6,
+	6, 4, 0,
+	// right
+	3, 1, 5,
+	5, 7, 3,
+	// back
+	6, 4, 5,
+	5, 7, 6
+  };
+
+  glEnable(GL_DEPTH_TEST);
+
 
   uint32_t VBO, VAO, EBO;
   glGenVertexArrays(1, &VAO);
@@ -87,26 +114,50 @@ int main() {
 	return 1;
   }
 
-  GLuint transform_location = glGetUniformLocation(shaderProgram, "transform");
-  if(transform_location < 0) {
+  GLuint rotation_location = glGetUniformLocation(shaderProgram, "rotation");
+  if(rotation_location < 0) {
 	glfwTerminate();
 	return 1;
   }
-  float transform[16];
 
- // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  GLuint translation_location = glGetUniformLocation(shaderProgram, "translation");
+  if(translation_location < 0) {
+	glfwTerminate();
+	return 1;
+  }
+
+  GLuint projection_location = glGetUniformLocation(shaderProgram, "projection");
+  if(projection_location < 0) {
+	glfwTerminate();
+	return 1;
+  }
+
+
+  float rotation[16];
+  float translation[16] = {
+	1.0f, 0.0f, 0.0f, 0.0f,
+	0.0f, 1.0f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 2.0f,
+	0.0f, 0.0f, 0.0f, 1.0f
+  };
+  float projection[16];
+  projection_matrix(M_PI_2, (float)SCR_WIDTH/(float)SCR_HEIGHT, 0.5f, 10.0f, projection);
+//  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   while (!glfwWindowShouldClose(window)) {
     processInput(window);
     // ------
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClear(GL_COLOR_BUFFER_BIT);
     // -- draw a triangle
     glBindTexture(GL_TEXTURE_2D, texture);
     glUseProgram(shaderProgram);
-    rotation_matrix_z(transform, (float)glfwGetTime());
-    glUniformMatrix4fv(transform_location, 1, GL_TRUE, transform);
+    rotation_matrix_y(rotation, (float)glfwGetTime());
+    glUniformMatrix4fv(rotation_location, 1, GL_TRUE, rotation);
+    glUniformMatrix4fv(translation_location, 1, GL_TRUE, translation);
+    glUniformMatrix4fv(projection_location, 1, GL_TRUE, projection);
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
     // ----
     glfwSwapBuffers(window);
