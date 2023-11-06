@@ -44,36 +44,23 @@ int main() {
 
   float vertices[] = {
       // coordinates      // texture coordinates
-      -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, // top left, front
-      0.5f,  0.5f,  0.0f, 1.0f, 1.0f, // top right, front
-      -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left, front
-      0.5f,  -0.5f, 0.0f, 1.0f, 0.0f // bottom right, front
-
-      -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, // top left, back
-      0.5f,  0.5f, -0.5f, 1.0f, 1.0f, // top right, back
-      -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, // bottom left, back
-      0.5f,  -0.5f, -0.5f, 1.0f, 0.0f // bottom right, back
+  -0.5f,0.5f,0.0f,0.0f, 1.0f,
+  -0.5f,-0.5f,0.0f,0.0f,0.0f,
+  0.5f,0.5f,0.0f,1.0f, 1.0f,
+  0.5f,-0.5f,0.0f,1.0f,.0f,
+  -0.5f,0.5f,-1.0f,0.0f,1.0f,
+  -0.5f,-0.5f,-1.0f,0.0f,0.0f,
+  0.5f,0.5f,-1.0f,1.0f, 1.0f,
+  0.5f,-0.5f,-1.0f,1.0f, 0.0f,
   };
 
   unsigned int indecies[] = {
-	// front
-	2, 3, 0,
-	0, 1, 3,
-	// bottom
-	2, 6, 3,
-	3, 7, 6,
-	// top
-	0, 4, 5,
-	5, 1, 0,
-	// left
-	0, 2, 6,
-	6, 4, 0,
-	// right
-	3, 1, 5,
-	5, 7, 3,
-	// back
-	6, 4, 5,
-	5, 7, 6
+  0, 2, 3, 0, 3, 1,
+  2, 6, 7, 2, 7, 3,
+  6, 4, 5, 6, 5, 7,
+  4, 0, 1, 4, 1, 5,
+  0, 4, 6, 0, 6, 2,
+  1, 5, 7, 1, 7, 3,
   };
 
   glEnable(GL_DEPTH_TEST);
