@@ -6,30 +6,38 @@
 #include <string.h>
 #include <sys/wait.h>
 
-
+#include "api.h"
 
 int main(int argc, char*argv[]){
-	char * hello = "hello";
-	int memFd = shm_open("example_memory", O_CREAT | O_RDWR, S_IRWXU);
+	struct window_properties properties = {
+		.window_id = "123456789123456",
+		.width = 200,
+		.height = 200,
+		.bytes_per_pixel = 4
+	};
+	size_t size_of_window_buffer = properties.width * properties.height * properties.bytes_per_pixel;
+	int memFd = shm_open(properties.window_id, O_CREAT | O_RDWR, S_IRWXU);
 	if (memFd == -1)
 	{
 	    perror("Can't open file");
 	    return 1;
 	}
 
-	int res = ftruncate(memFd, sizeof(hello));
+	int res = ftruncate(memFd, size_of_window_buffer);
 	if (res == -1)
 	{
 	    perror("Can't truncate file");
 	    return res;
 	}
-	char *buffer = mmap(NULL, sizeof(hello), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0);
+	unsigned char *buffer = mmap(NULL, size_of_window_buffer, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0);
 	if (buffer == NULL)
 	{
 	    perror("Can't mmap");
 	    return -1;
 	}
 
+	memset(buffer, 0, size_of_window_buffer);
+	char hello[] = "hello world";
 	memcpy(buffer, hello, sizeof(hello));
 	int fd[2] = {0};
 	if(pipe(fd)) {
@@ -48,15 +56,14 @@ int main(int argc, char*argv[]){
 	} else {
 		printf("I am a parent: %d\n", pid);
 		close(fd[0]);  // Close read end
-		size_t sizeof_hello = sizeof(hello);
-            	write(fd[1], &sizeof_hello, sizeof(size_t));
+		write(fd[1], &properties, sizeof(struct window_properties));
 	        close(fd[1]);
 		int status = 0;
 		while(wait(&status) > 0){
 			printf("child terminated: %d\n", status);
 		}
+		munmap(buffer, size_of_window_buffer);
 		close(memFd);
-		shm_unlink("example_memory");
+		shm_unlink(properties.window_id);
 	}
-
 }
