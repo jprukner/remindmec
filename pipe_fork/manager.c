@@ -5,12 +5,16 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <semaphore.h>
+
 
 #include "api.h"
 
 int main(int argc, char*argv[]){
+	int return_code = 0;
+
 	struct window_properties properties = {
-		.window_id = "123456789123456",
+		.window_id = "/12345678912345",
 		.width = 200,
 		.height = 200,
 		.bytes_per_pixel = 4
@@ -19,34 +23,46 @@ int main(int argc, char*argv[]){
 	int memFd = shm_open(properties.window_id, O_CREAT | O_RDWR, S_IRWXU);
 	if (memFd == -1)
 	{
-	    perror("Can't open file");
+	    perror("failed to open shared memory file");
 	    return 1;
 	}
 
 	int res = ftruncate(memFd, size_of_window_buffer);
 	if (res == -1)
 	{
-	    perror("Can't truncate file");
-	    return res;
+		perror("failed truncate shared memory");
+		return_code = res;
+		goto cleanup_1;
 	}
 	unsigned char *buffer = mmap(NULL, size_of_window_buffer, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0);
 	if (buffer == NULL)
 	{
-	    perror("Can't mmap");
-	    return -1;
+		perror("failed to mmap shared memory");
+		return_code = 1;
+		goto cleanup_1;
 	}
-
 	memset(buffer, 0, size_of_window_buffer);
 	char hello[] = "hello world";
 	memcpy(buffer, hello, sizeof(hello));
+
+	sem_t *semaphore = sem_open(properties.window_id, O_CREAT | O_EXCL, S_IRWXU, 1);
+	if(semaphore == SEM_FAILED) {
+		perror("failed to create semaphore");
+		return_code = 1;
+		goto cleanup_2;
+	}
+	printf("successfully created named semaphore '%s'\n", properties.window_id);
+
 	int fd[2] = {0};
 	if(pipe(fd)) {
 		perror("failed to create pipe");
-		return 1;
+		return_code = 1;
+		goto cleanup_3;
 	}
 	pid_t pid = fork();
 	if(pid < 0) {
 		perror("failed to fork");
+		return_code = 1;
 	} else if(pid == 0) {
 		printf("I am a child: %d\n", pid);
 		close(fd[1]);
@@ -58,12 +74,33 @@ int main(int argc, char*argv[]){
 		close(fd[0]);  // Close read end
 		write(fd[1], &properties, sizeof(struct window_properties));
 	        close(fd[1]);
+
+	        // update loop
+	        int n=0;
+	        while(n < 10000){
+	                sem_wait(semaphore);
+	                        printf("buffer: %s\n", buffer);
+	                sem_post(semaphore);
+			n++;
+			usleep(16000);
+	        }
+	        // ---
+
+
 		int status = 0;
 		while(wait(&status) > 0){
 			printf("child terminated: %d\n", status);
 		}
-		munmap(buffer, size_of_window_buffer);
-		close(memFd);
-		shm_unlink(properties.window_id);
 	}
+
+cleanup_3:
+	sem_close(semaphore);
+	sem_unlink(properties.window_id);
+cleanup_2:
+	munmap(buffer, size_of_window_buffer);
+cleanup_1:
+	shm_unlink(properties.window_id);
+	close(memFd);
+
+	return return_code;
 }
