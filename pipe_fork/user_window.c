@@ -4,10 +4,21 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #include "api.h"
 
+static sem_t stop;
+static void sig_handler(int signal_number) {
+        printf("user_window: got signal %d\n", signal_number);
+        sem_post(&stop);
+}
+
 int main(int argc, char*argv[]){
+        sem_init(&stop, 0, 0);
+        signal(SIGINT, sig_handler);
+        signal(SIGTERM, sig_handler);
+
 	int return_code = 0;
 
 	struct window_properties properties;
@@ -54,16 +65,22 @@ int main(int argc, char*argv[]){
 
 	// update loop
 	int n=0;
-	while(n < 10000){
+	int should_stop = 0;
+	while(n < 10000 && !should_stop){
 		sem_wait(semaphore);
 			buffer[0] = (n%26)+'a';
 		sem_post(semaphore);
 		n++;
 		usleep(16000);
+		if (sem_getvalue(&stop, &should_stop) < 0) {
+			perror("sem_getvalue()");
+			break;
+		}
 	}
 	// ---
 
         sem_close(semaphore);
+	sem_destroy(&stop);
 cleanup_2:
         munmap(buffer, shared_memory_size);
 cleanup_1:

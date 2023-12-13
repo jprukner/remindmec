@@ -6,11 +6,22 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <semaphore.h>
-
+#include <signal.h>
 
 #include "api.h"
 
+static sem_t stop;
+static void sig_handler(int signal_number) {
+	printf("manager: got signal %d\n", signal_number);
+	sem_post(&stop);
+}
+
+
 int main(int argc, char*argv[]){
+	sem_init(&stop, 0, 0);
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+
 	int return_code = 0;
 
 	struct window_properties properties = {
@@ -77,12 +88,17 @@ int main(int argc, char*argv[]){
 
 	        // update loop
 	        int n=0;
-	        while(n < 10000){
+		int should_stop = 0;
+	        while(n < 10000 && !should_stop){
 	                sem_wait(semaphore);
 	                        printf("buffer: %s\n", buffer);
 	                sem_post(semaphore);
 			n++;
 			usleep(16000);
+			if (sem_getvalue(&stop, &should_stop) < 0) {
+				perror("sem_getvalue()");
+				break;
+			}
 	        }
 	        // ---
 
@@ -94,6 +110,7 @@ int main(int argc, char*argv[]){
 	}
 
 cleanup_3:
+	sem_destroy(&stop);
 	sem_close(semaphore);
 	sem_unlink(properties.window_id);
 cleanup_2:
