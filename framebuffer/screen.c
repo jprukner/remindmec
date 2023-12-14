@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 #include "shorttypes.h"
+#include "screen.h"
 
 static char *errors_mapping[] = {
 	"failed to open framebuffer",
