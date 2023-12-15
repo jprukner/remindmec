@@ -9,6 +9,7 @@
 #include <signal.h>
 
 #include "api.h"
+#include "screen.h"
 
 static sem_t stop;
 static void sig_handler(int signal_number) {
@@ -53,8 +54,6 @@ int main(int argc, char*argv[]){
 		goto cleanup_1;
 	}
 	memset(buffer, 0, size_of_window_buffer);
-	char hello[] = "hello world";
-	memcpy(buffer, hello, sizeof(hello));
 
 	sem_t *semaphore = sem_open(properties.window_id, O_CREAT | O_EXCL, S_IRWXU, 1);
 	if(semaphore == SEM_FAILED) {
@@ -63,6 +62,13 @@ int main(int argc, char*argv[]){
 		goto cleanup_2;
 	}
 	printf("successfully created named semaphore '%s'\n", properties.window_id);
+
+	enum screen_init_error error;
+        struct screen screen = screen_init(&error);
+        if(error != SCREEN_INIT_NO_ERROR) {
+                screen_perror(error);
+                goto cleanup_3;
+        }
 
 	int fd[2] = {0};
 	if(pipe(fd)) {
@@ -91,7 +97,8 @@ int main(int argc, char*argv[]){
 		int should_stop = 0;
 	        while(n < 10000 && !should_stop){
 	                sem_wait(semaphore);
-	                        printf("buffer: %s\n", buffer);
+	                        // copy to temp buffer
+				screen_place_window(screen, 0, 0, properties.width, properties.height, buffer);
 	                sem_post(semaphore);
 			n++;
 			usleep(16000);
@@ -99,6 +106,7 @@ int main(int argc, char*argv[]){
 				perror("sem_getvalue()");
 				break;
 			}
+			screen_swap_buffers(screen);
 	        }
 	        // ---
 
@@ -109,6 +117,7 @@ int main(int argc, char*argv[]){
 		}
 	}
 
+	screen_free(screen);
 cleanup_3:
 	sem_destroy(&stop);
 	sem_close(semaphore);

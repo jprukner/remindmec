@@ -7,6 +7,7 @@
 #include <signal.h>
 
 #include "api.h"
+#include "shorttypes.h"
 
 static sem_t stop;
 static void sig_handler(int signal_number) {
@@ -68,7 +69,14 @@ int main(int argc, char*argv[]){
 	int should_stop = 0;
 	while(n < 10000 && !should_stop){
 		sem_wait(semaphore);
-			buffer[0] = (n%26)+'a';
+			for(u16 y=0; y < properties.height; y++) {
+				for(u16 x=0; x < properties.width; x++) {
+					u32 offset = ((y*properties.width)+x)*properties.bytes_per_pixel;
+					buffer[offset + 0] = (n+x)%255;
+					buffer[offset + 1] = (n+y)%255;
+					buffer[offset + 2] = (n+x+y)%255;
+				}
+			}
 		sem_post(semaphore);
 		n++;
 		usleep(16000);
