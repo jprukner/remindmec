@@ -8,6 +8,7 @@
 
 #include "api.h"
 #include "shorttypes.h"
+#include "font.h"
 
 static sem_t stop;
 static void sig_handler(int signal_number) {
@@ -64,22 +65,32 @@ int main(int argc, char*argv[]){
 		goto cleanup_2;
 	}
 
+	enum font_init_error error;
+	struct font font = font_init(properties.height/10, "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf", &error);
+	if (error != FONT_INIT_ERROR_NO_ERROR) {
+		goto cleanup_3;
+	}
+
 	// update loop
 	int n=0;
 	int should_stop = 0;
-	while(n < 10000 && !should_stop){
+	u16 x = 0;
+	u16 y = 0;
+	while(n < 10 && !should_stop){
+		// setup glyph
+		u32 character = (n%(255-32))+' ';
+		// --
 		sem_wait(semaphore);
-			for(u16 y=0; y < properties.height; y++) {
-				for(u16 x=0; x < properties.width; x++) {
-					u32 offset = ((y*properties.width)+x)*properties.bytes_per_pixel;
-					buffer[offset + 0] = (n+x)%255;
-					buffer[offset + 1] = (n+y)%255;
-					buffer[offset + 2] = (n+x+y)%255;
-				}
-			}
+		if (x > properties.width) {
+			x = 0;
+			memset(buffer, 0, properties.width*properties.height*properties.bytes_per_pixel);
+		}
+		u16 advance = font_put_character(font, x, y, character, properties, buffer);
 		sem_post(semaphore);
+		// Move the x position, ready for the next character.
+		x += advance;
 		n++;
-		usleep(16000);
+		usleep(320000);
 		if (sem_getvalue(&stop, &should_stop) < 0) {
 			perror("sem_getvalue()");
 			break;
@@ -87,13 +98,15 @@ int main(int argc, char*argv[]){
 	}
 	// ---
 
+cleanup_4:
+	font_free(font);
+cleanup_3:
         sem_close(semaphore);
-	sem_destroy(&stop);
 cleanup_2:
         munmap(buffer, shared_memory_size);
 cleanup_1:
         shm_unlink(properties.window_id);
         close(memFd);
-
+	sem_destroy(&stop);
         return return_code;
 }

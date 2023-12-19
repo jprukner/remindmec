@@ -95,13 +95,13 @@ int main(int argc, char*argv[]){
 	        // update loop
 	        int n=0;
 		int should_stop = 0;
-	        while(n < 10000 && !should_stop){
+	        while(n < 5000 && !should_stop){
 	                sem_wait(semaphore);
 	                        // copy to temp buffer
 				screen_place_window(screen, 0, 0, properties.width, properties.height, buffer);
 	                sem_post(semaphore);
 			n++;
-			usleep(16000);
+			usleep(32000);
 			if (sem_getvalue(&stop, &should_stop) < 0) {
 				perror("sem_getvalue()");
 				break;
@@ -110,11 +110,9 @@ int main(int argc, char*argv[]){
 	        }
 	        // ---
 
-
 		int status = 0;
-		while(wait(&status) > 0){
-			printf("child terminated: %d\n", status);
-		}
+		while(wait(&status) > 0) {};
+		printf("done\n");
 	}
 
 	screen_free(screen);
